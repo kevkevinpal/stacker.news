@@ -1,11 +1,12 @@
-import { AuthenticationError } from 'apollo-server-micro'
+import { GraphQLError } from 'graphql'
 import { inviteSchema, ssValidate } from '../../lib/validate'
+import { msatsToSats } from '../../lib/format'
 
 export default {
   Query: {
     invites: async (parent, args, { me, models }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'FORBIDDEN' } })
       }
 
       return await models.invite.findMany({
@@ -29,7 +30,7 @@ export default {
   Mutation: {
     createInvite: async (parent, { gift, limit }, { me, models }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'FORBIDDEN' } })
       }
 
       await ssValidate(inviteSchema, { gift, limit })
@@ -40,7 +41,7 @@ export default {
     },
     revokeInvite: async (parent, { id }, { me, models }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'FORBIDDEN' } })
       }
 
       return await models.invite.update({
@@ -59,7 +60,7 @@ export default {
     },
     poor: async (invite, args, { me, models }) => {
       const user = await models.user.findUnique({ where: { id: invite.userId } })
-      return user.msats < invite.gift * 1000
+      return msatsToSats(user.msats) < invite.gift
     }
   }
 }

@@ -6,16 +6,17 @@ import ActionTooltip from './action-tooltip'
 import ItemAct from './item-act'
 import { useMe } from './me'
 import Rainbow from '../lib/rainbow'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import LongPressable from 'react-longpressable'
-import { Overlay, Popover } from 'react-bootstrap'
+import Overlay from 'react-bootstrap/Overlay'
+import Popover from 'react-bootstrap/Popover'
 import { useShowModal } from './modal'
 import { useRouter } from 'next/router'
 import { LightningConsumer } from './lightning'
 
 const getColor = (meSats) => {
   if (!meSats || meSats <= 10) {
-    return 'var(--secondary)'
+    return 'var(--bs-secondary)'
   }
 
   const idx = Math.min(
@@ -33,13 +34,13 @@ const UpvotePopover = ({ target, show, handleClose }) => {
       placement='right'
     >
       <Popover id='popover-basic'>
-        <Popover.Title className='d-flex justify-content-between alert-dismissible' as='h3'>Zapping
-          <button type='button' className='close' onClick={handleClose}><span aria-hidden='true'>×</span><span className='sr-only'>Close alert</span></button>
-        </Popover.Title>
-        <Popover.Content>
+        <Popover.Body className='d-flex justify-content-between alert-dismissible' as='h3'>Zapping
+          <button type='button' className='close' onClick={handleClose}><span aria-hidden='true'>×</span><span className='visually-hidden-focusable'>Close alert</span></button>
+        </Popover.Body>
+        <Popover.Body>
           <div className='mb-2'>Press the bolt again to zap {me?.tipDefault || 1} more sat{me?.tipDefault > 1 ? 's' : ''}.</div>
           <div>Repeatedly press the bolt to zap more sats.</div>
-        </Popover.Content>
+        </Popover.Body>
       </Popover>
     </Overlay>
   )
@@ -52,13 +53,13 @@ const TipPopover = ({ target, show, handleClose }) => (
     placement='right'
   >
     <Popover id='popover-basic'>
-      <Popover.Title className='d-flex justify-content-between alert-dismissible' as='h3'>Press and hold
-        <button type='button' className='close' onClick={handleClose}><span aria-hidden='true'>×</span><span className='sr-only'>Close alert</span></button>
-      </Popover.Title>
-      <Popover.Content>
+      <Popover.Body className='d-flex justify-content-between alert-dismissible' as='h3'>Press and hold
+        <button type='button' className='close' onClick={handleClose}><span aria-hidden='true'>×</span><span className='visually-hidden-focusable'>Close alert</span></button>
+      </Popover.Body>
+      <Popover.Body>
         <div className='mb-2'>Press and hold bolt to zap a custom amount.</div>
         <div>As you zap more, the bolt color follows the rainbow.</div>
-      </Popover.Content>
+      </Popover.Body>
     </Popover>
   </Overlay>
 )
@@ -78,7 +79,7 @@ export default function UpVote ({ item, className, pendingSats, setPendingSats }
       }`
   )
 
-  const setVoteShow = (yes) => {
+  const setVoteShow = useCallback((yes) => {
     if (!me) return
 
     // if they haven't seen the walkthrough and they have sats
@@ -90,9 +91,9 @@ export default function UpVote ({ item, className, pendingSats, setPendingSats }
       _setVoteShow(false)
       setWalkthrough({ variables: { upvotePopover: true } })
     }
-  }
+  }, [me, voteShow, setWalkthrough])
 
-  const setTipShow = (yes) => {
+  const setTipShow = useCallback((yes) => {
     if (!me) return
 
     // if we want to show it, yet we still haven't shown
@@ -105,7 +106,7 @@ export default function UpVote ({ item, className, pendingSats, setPendingSats }
       _setTipShow(false)
       setWalkthrough({ variables: { tipPopover: true } })
     }
-  }
+  }, [me, tipShow, setWalkthrough])
 
   const [act] = useMutation(
     gql`
@@ -161,18 +162,20 @@ export default function UpVote ({ item, className, pendingSats, setPendingSats }
     }
 
     if (pendingSats > 0) {
-      timerRef.current = setTimeout(async (pendingSats) => {
+      timerRef.current = setTimeout(async (sats) => {
         try {
           timerRef.current && setPendingSats(0)
           await act({
-            variables: { id: item.id, sats: pendingSats },
+            variables: { id: item.id, sats },
             optimisticResponse: {
               act: {
-                sats: pendingSats
+                sats
               }
             }
           })
         } catch (error) {
+          if (!timerRef.current) return
+
           if (error.toString().includes('insufficient funds')) {
             showModal(onClose => {
               return <FundError onClose={onClose} />
@@ -181,14 +184,14 @@ export default function UpVote ({ item, className, pendingSats, setPendingSats }
           }
           throw new Error({ message: error.toString() })
         }
-      }, 1000, pendingSats)
+      }, 500, pendingSats)
     }
 
-    return () => {
+    return async () => {
       clearTimeout(timerRef.current)
       timerRef.current = null
     }
-  }, [item, pendingSats, act, setPendingSats, showModal])
+  }, [pendingSats, act, item, showModal, setPendingSats])
 
   const disabled = useMemo(() => {
     return item?.mine || (me && Number(me.id) === item?.fwdUserId) || item?.deletedAt
@@ -213,7 +216,7 @@ export default function UpVote ({ item, className, pendingSats, setPendingSats }
 
   return (
     <LightningConsumer>
-      {({ strike }) =>
+      {(strike) =>
         <div ref={ref} className='upvoteParent'>
           <LongPressable
             onLongPress={
@@ -233,21 +236,21 @@ export default function UpVote ({ item, className, pendingSats, setPendingSats }
             onShortPress={
             me
               ? async (e) => {
-                  if (!item) return
+                if (!item) return
 
-                  // we can't tip ourselves
-                  if (disabled) {
-                    return
-                  }
-
-                  if (meSats) {
-                    setVoteShow(false)
-                  }
-
-                  strike()
-
-                  setPendingSats(pendingSats + sats)
+                // we can't tip ourselves
+                if (disabled) {
+                  return
                 }
+
+                if (meSats) {
+                  setVoteShow(false)
+                }
+
+                strike()
+
+                setPendingSats(pendingSats + sats)
+              }
               : async () => await router.push({
                 pathname: '/signup',
                 query: { callbackUrl: window.location.origin + router.asPath }
@@ -259,8 +262,8 @@ export default function UpVote ({ item, className, pendingSats, setPendingSats }
                 className={`${disabled ? styles.noSelfTips : ''} ${styles.upvoteWrapper}`}
               >
                 <UpBolt
-                  width={24}
-                  height={24}
+                  width={26}
+                  height={26}
                   className={
                       `${styles.upvote}
                       ${className || ''}

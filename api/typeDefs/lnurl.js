@@ -1,4 +1,4 @@
-import { gql } from 'apollo-server-micro'
+import { gql } from 'graphql-tag'
 
 export default gql`
   extend type Query {
@@ -13,7 +13,7 @@ export default gql`
 
   type LnAuth {
     id: ID!
-    createdAt: String!
+    createdAt: Date!
     k1: String!
     pubkey: String
     encodedUrl: String!
@@ -22,7 +22,7 @@ export default gql`
 
   type LnWith {
     id: ID!
-    createdAt: String!
+    createdAt: Date!
     k1: String!
     user: User!
     withdrawalId: Int

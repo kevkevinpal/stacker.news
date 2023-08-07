@@ -3,7 +3,7 @@ import lnd from '../../../../api/lnd'
 import { createInvoice } from 'ln-service'
 import { lnurlPayDescriptionHashForUser } from '../../../../lib/lnurl'
 import serialize from '../../../../api/resolvers/serial'
-import * as secp256k1 from '@noble/secp256k1'
+import { schnorr } from '@noble/curves/secp256k1'
 import { createHash } from 'crypto'
 
 export default async ({ query: { username, amount, nostr } }, res) => {
@@ -19,8 +19,7 @@ export default async ({ query: { username, amount, nostr } }, res) => {
       const note = JSON.parse(noteStr)
       const hasPTag = note.tags?.filter(t => t[0] === 'p').length >= 1
       const hasETag = note.tags?.filter(t => t[0] === 'e').length <= 1
-      if (await secp256k1.schnorr.verify(note.sig, note.id, note.pubkey) &&
-      hasPTag && hasETag) {
+      if (schnorr.verify(note.sig, note.id, note.pubkey) && hasPTag && hasETag) {
         description = user.hideInvoiceDesc ? undefined : 'zap'
         descriptionHash = createHash('sha256').update(noteStr).digest('hex')
       } else {
@@ -39,7 +38,7 @@ export default async ({ query: { username, amount, nostr } }, res) => {
     // generate invoice
     const expiresAt = new Date(new Date().setMinutes(new Date().getMinutes() + 1))
     const invoice = await createInvoice({
-      description: description,
+      description,
       description_hash: descriptionHash,
       lnd,
       mtokens: amount,
@@ -48,7 +47,7 @@ export default async ({ query: { username, amount, nostr } }, res) => {
 
     await serialize(models,
       models.$queryRaw`SELECT * FROM create_invoice(${invoice.id}, ${invoice.request},
-        ${expiresAt}, ${Number(amount)}, ${user.id}, ${noteStr || description})`)
+        ${expiresAt}::timestamp, ${Number(amount)}, ${user.id}::INTEGER, ${noteStr || description})`)
 
     return res.status(200).json({
       pr: invoice.request,

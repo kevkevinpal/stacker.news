@@ -1,9 +1,10 @@
-import { Table } from 'react-bootstrap'
+import Table from 'react-bootstrap/Table'
 import ActionTooltip from './action-tooltip'
 import Info from './info'
 import styles from './fee-button.module.css'
 import { gql, useQuery } from '@apollo/client'
 import { useFormikContext } from 'formik'
+import { SSR } from '../lib/constants'
 
 function Receipt ({ cost, repetition, hasImgLink, baseFee, parentId, boost }) {
   return (
@@ -31,7 +32,7 @@ function Receipt ({ cost, repetition, hasImgLink, baseFee, parentId, boost }) {
       </tbody>
       <tfoot>
         <tr>
-          <td className='font-weight-bold'>{cost} sats</td>
+          <td className='fw-bold'>{cost} sats</td>
           <td align='right' className='font-weight-light'>total fee</td>
         </tr>
       </tfoot>
@@ -43,10 +44,10 @@ export default function FeeButton ({ parentId, hasImgLink, baseFee, ChildButton,
   const query = parentId
     ? gql`{ itemRepetition(parentId: "${parentId}") }`
     : gql`{ itemRepetition }`
-  const { data } = useQuery(query, { pollInterval: 1000 })
+  const { data } = useQuery(query, SSR ? {} : { pollInterval: 1000, nextFetchPolicy: 'cache-and-network' })
   const repetition = data?.itemRepetition || 0
   const formik = useFormikContext()
-  const boost = formik?.values?.boost || 0
+  const boost = Number(formik?.values?.boost) || 0
   const cost = baseFee * (hasImgLink ? 10 : 1) * Math.pow(10, repetition) + Number(boost)
 
   const show = alwaysShow || !formik?.isSubmitting
@@ -90,7 +91,7 @@ function EditReceipt ({ cost, paidSats, addImgLink, boost, parentId }) {
       </tbody>
       <tfoot>
         <tr>
-          <td className='font-weight-bold'>{cost} sats</td>
+          <td className='fw-bold'>{cost} sats</td>
           <td align='right' className='font-weight-light'>total fee</td>
         </tr>
       </tfoot>

@@ -1,8 +1,6 @@
 import { useRouter } from 'next/router'
 import { Form, Select } from './form'
-
-const USER_SORTS = ['stacked', 'spent', 'comments', 'posts', 'referrals']
-const ITEM_SORTS = ['votes', 'comments', 'sats']
+import { ITEM_SORTS, USER_SORTS, WHENS } from '../lib/constants'
 
 export default function TopHeader ({ sub, cat }) {
   const router = useRouter()
@@ -19,11 +17,11 @@ export default function TopHeader ({ sub, cat }) {
 
     const prefix = sub ? `/~${sub}` : ''
 
-    if (typeof query.sort !== 'undefined') {
-      if (query.sort === '' ||
-          (what === 'stackers' && !USER_SORTS.includes(query.sort)) ||
-          (what !== 'stackers' && !ITEM_SORTS.includes(query.sort))) {
-        delete query.sort
+    if (typeof query.by !== 'undefined') {
+      if (query.by === '' ||
+          (what === 'stackers' && (query.by === 'stacked' || !USER_SORTS.includes(query.by))) ||
+          (what !== 'stackers' && (query.by === 'votes' || !ITEM_SORTS.includes(query.by)))) {
+        delete query.by
       }
     }
 
@@ -33,24 +31,25 @@ export default function TopHeader ({ sub, cat }) {
     })
   }
 
+  const what = cat
+  const by = router.query.by || (what === 'stackers' ? 'stacked' : 'votes')
+  const when = router.query.when || ''
+
   return (
     <div className='d-flex'>
       <Form
-        className='mr-auto'
-        initial={{
-          what: cat,
-          sort: router.query.sort || '',
-          when: router.query.when || ''
-        }}
+        className='me-auto'
+        initial={{ what, by, when }}
         onSubmit={top}
       >
-        <div className='text-muted font-weight-bold my-3 d-flex align-items-center'>
+        <div className='text-muted fw-bold my-3 d-flex align-items-center'>
           top
           <Select
             groupClassName='mx-2 mb-0'
             onChange={(formik, e) => top({ ...formik?.values, what: e.target.value })}
             name='what'
             size='sm'
+            overrideValue={what}
             items={router?.query?.sub ? ['posts', 'comments'] : ['posts', 'comments', 'stackers', 'cowboys']}
           />
           {cat !== 'cowboys' &&
@@ -58,18 +57,20 @@ export default function TopHeader ({ sub, cat }) {
               by
               <Select
                 groupClassName='mx-2 mb-0'
-                onChange={(formik, e) => top({ ...formik?.values, sort: e.target.value })}
-                name='sort'
+                onChange={(formik, e) => top({ ...formik?.values, by: e.target.value })}
+                name='by'
                 size='sm'
+                overrideValue={by}
                 items={cat === 'stackers' ? USER_SORTS : ITEM_SORTS}
               />
               for
               <Select
-                groupClassName='mb-0 ml-2'
+                groupClassName='mb-0 ms-2'
                 onChange={(formik, e) => top({ ...formik?.values, when: e.target.value })}
                 name='when'
                 size='sm'
-                items={['day', 'week', 'month', 'year', 'forever']}
+                overrideValue={when}
+                items={WHENS}
               />
             </>}
 

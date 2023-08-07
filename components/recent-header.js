@@ -1,31 +1,26 @@
-import { Form, Select } from './form'
+import { ITEM_TYPES } from '../lib/constants'
+import { Select } from './form'
 import { useRouter } from 'next/router'
 
 export default function RecentHeader ({ type, sub }) {
   const router = useRouter()
-  const prefix = sub?.name ? `/~${sub.name}` : ''
+  const prefix = sub ? `/~${sub}` : ''
 
-  const items = ['posts', 'bounties', 'comments', 'links', 'discussions', 'polls']
-  if (!sub?.name) {
-    items.push('bios')
-  }
+  const items = ITEM_TYPES(sub)
 
+  type ||= router.query.type || type || 'posts'
   return (
-    <Form
-      initial={{
-        type: router.query.type || type || 'posts'
-      }}
-    >
-      <div className='text-muted font-weight-bold mt-0 mb-3 d-flex justify-content-end align-items-center'>
-        <Select
-          groupClassName='mb-0 ml-2'
-          className='w-auto'
-          name='type'
-          size='sm'
-          items={items}
-          onChange={(formik, e) => router.push(prefix + (e.target.value === 'posts' ? '/recent' : `/recent/${e.target.value}`))}
-        />
-      </div>
-    </Form>
+    <div className='text-muted fw-bold mt-0 mb-3 d-flex justify-content-end align-items-center'>
+      <Select
+        groupClassName='mb-0 ms-2'
+        className='w-auto'
+        name='type'
+        size='sm'
+        value={type}
+        items={items}
+        noForm
+        onChange={(_, e) => router.push(prefix + (e.target.value === 'posts' ? '/recent' : `/recent/${e.target.value}`))}
+      />
+    </div>
   )
 }

@@ -1,11 +1,11 @@
 import { gql, useMutation } from '@apollo/client'
-import { Button } from 'react-bootstrap'
+import Button from 'react-bootstrap/Button'
 import { fixedDecimal } from '../lib/format'
 import { timeLeft } from '../lib/time'
 import { useMe } from './me'
 import styles from './poll.module.css'
 import Check from '../svgs/checkbox-circle-fill.svg'
-import { signIn } from 'next-auth/client'
+import { signIn } from 'next-auth/react'
 import ActionTooltip from './action-tooltip'
 import { useShowModal } from './modal'
 import FundError from './fund-error'
@@ -52,21 +52,21 @@ export default function Poll ({ item }) {
           variant='outline-info' className={styles.pollButton}
           onClick={me
             ? async () => {
-                try {
-                  await pollVote({
-                    variables: { id: v.id },
-                    optimisticResponse: {
-                      pollVote: v.id
-                    }
-                  })
-                } catch (error) {
-                  if (error.toString().includes('insufficient funds')) {
-                    showModal(onClose => {
-                      return <FundError onClose={onClose} />
-                    })
+              try {
+                await pollVote({
+                  variables: { id: v.id },
+                  optimisticResponse: {
+                    pollVote: v.id
                   }
+                })
+              } catch (error) {
+                if (error.toString().includes('insufficient funds')) {
+                  showModal(onClose => {
+                    return <FundError onClose={onClose} />
+                  })
                 }
               }
+            }
             : signIn}
         >
           {v.option}
@@ -94,8 +94,8 @@ export default function Poll ({ item }) {
 function PollResult ({ v, progress }) {
   return (
     <div className={styles.pollResult}>
-      <span className={styles.pollOption}>{v.option}{v.meVoted && <Check className='fill-grey ml-1 align-self-center' width={18} height={18} />}</span>
-      <span className='ml-auto mr-2 align-self-center'>{progress}%</span>
+      <span className={styles.pollOption}>{v.option}{v.meVoted && <Check className='fill-grey ms-1 align-self-center' width={18} height={18} />}</span>
+      <span className='ms-auto me-2 align-self-center'>{progress}%</span>
       <div className={styles.pollProgress} style={{ width: `${progress}%` }} />
     </div>
   )

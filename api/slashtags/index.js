@@ -19,7 +19,10 @@ async function createProfile (slashtag) {
 
 const slashtags = global.slashtags || (() => {
   console.log('initing slashtags')
-  const sdk = new SDK({ primaryKey: process.env.SLASHTAGS_SECRET ? Buffer.from(process.env.SLASHTAGS_SECRET, 'hex') : undefined })
+  const sdk = new SDK({
+    primaryKey: process.env.SLASHTAGS_SECRET ? Buffer.from(process.env.SLASHTAGS_SECRET, 'hex') : undefined,
+    storage: './.slashtags'
+  })
 
   // Get the default slashtag
   const slashtag = sdk.slashtag()

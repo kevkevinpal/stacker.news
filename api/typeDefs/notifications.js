@@ -1,4 +1,4 @@
-import { gql } from 'apollo-server-micro'
+import { gql } from 'graphql-tag'
 
 export default gql`
   extend type Query {
@@ -11,33 +11,39 @@ export default gql`
   }
 
   type Votification {
+    id: ID!
     earnedSats: Int!
     item: Item!
-    sortTime: String!
+    sortTime: Date!
   }
 
   type Reply {
+    id: ID!
     item: Item!
-    sortTime: String!
+    sortTime: Date!
   }
 
   type Mention {
+    id: ID!
     mention: Boolean!
     item: Item!
-    sortTime: String!
+    sortTime: Date!
   }
 
   type Invitification {
+    id: ID!
     invite: Invite!
-    sortTime: String!
+    sortTime: Date!
   }
 
   type JobChanged {
+    id: ID!
     item: Item!
-    sortTime: String!
+    sortTime: Date!
   }
 
   type EarnSources {
+    id: ID!
     posts: Int!
     comments: Int!
     tipPosts: Int!
@@ -45,25 +51,28 @@ export default gql`
   }
 
   type Streak {
-    sortTime: String!
-    days: Int
     id: ID!
+    sortTime: Date!
+    days: Int
   }
 
   type Earn {
+    id: ID!
     earnedSats: Int!
-    sortTime: String!
+    sortTime: Date!
     sources: EarnSources
   }
 
   type InvoicePaid {
+    id: ID!
     earnedSats: Int!
     invoice: Invoice!
-    sortTime: String!
+    sortTime: Date!
   }
 
   type Referral {
-    sortTime: String!
+    id: ID!
+    sortTime: Date!
   }
 
   union Notification = Reply | Votification | Mention
@@ -71,7 +80,7 @@ export default gql`
     | Streak
 
   type Notifications {
-    lastChecked: String
+    lastChecked: Date
     cursor: String
     notifications: [Notification!]!
   }

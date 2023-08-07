@@ -31,58 +31,25 @@ export const COMMENT_FIELDS = gql`
   }
 `
 
-export const MORE_FLAT_COMMENTS = gql`
-  ${COMMENT_FIELDS}
-
-  query MoreFlatComments($sub: String, $sort: String!, $cursor: String, $name: String, $within: String) {
-    moreFlatComments(sub: $sub, sort: $sort, cursor: $cursor, name: $name, within: $within) {
-      cursor
-      comments {
-        ...CommentFields
-        root {
-          id
-          title
-          bounty
-          bountyPaidTo
-          subName
-          user {
-            name
-            streak
-            hideCowboyHat
-            id
-          }
-        }
+export const COMMENTS_ITEM_EXT_FIELDS = gql`
+  fragment CommentItemExtFields on Item {
+    text
+    root {
+      id
+      title
+      bounty
+      bountyPaidTo
+      subName
+      user {
+        name
+        streak
+        hideCowboyHat
+        id
       }
     }
-  }
-`
+  }`
 
-export const TOP_COMMENTS = gql`
-  ${COMMENT_FIELDS}
-
-  query topComments($sort: String, $cursor: String, $when: String = "day") {
-    topComments(sort: $sort, cursor: $cursor, when: $when) {
-      cursor
-      comments {
-        ...CommentFields
-        root {
-          id
-          title
-          bounty
-          bountyPaidTo
-          subName
-          user {
-            name
-            streak
-            hideCowboyHat
-            id
-          }
-        }
-      }
-    }
-  }
-`
-
+// we only get the first COMMENT_DEPTH_LIMIT comments
 export const COMMENTS = gql`
   ${COMMENT_FIELDS}
 
@@ -106,54 +73,6 @@ export const COMMENTS = gql`
                     ...CommentFields
                     comments {
                       ...CommentFields
-                      comments {
-                        ...CommentFields
-                        comments {
-                          ...CommentFields
-                          comments {
-                            ...CommentFields
-                            comments {
-                              ...CommentFields
-                              comments {
-                                ...CommentFields
-                                comments {
-                                  ...CommentFields
-                                  comments {
-                                    ...CommentFields
-                                    comments {
-                                      ...CommentFields
-                                      comments {
-                                        ...CommentFields
-                                        comments {
-                                          ...CommentFields
-                                          comments {
-                                            ...CommentFields
-                                            comments {
-                                              ...CommentFields
-                                              comments {
-                                                ...CommentFields
-                                                comments {
-                                                  ...CommentFields
-                                                  comments {
-                                                    ...CommentFields
-                                                    comments {
-                                                      ...CommentFields
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
                     }
                   }
                 }

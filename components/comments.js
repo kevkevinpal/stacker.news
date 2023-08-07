@@ -1,24 +1,23 @@
-import { gql, useApolloClient, useLazyQuery } from '@apollo/client'
-import { useEffect, useState } from 'react'
 import Comment, { CommentSkeleton } from './comment'
 import styles from './header.module.css'
-import { Nav, Navbar } from 'react-bootstrap'
-import { COMMENTS_QUERY } from '../fragments/items'
-import { COMMENTS } from '../fragments/comments'
+import Nav from 'react-bootstrap/Nav'
+import Navbar from 'react-bootstrap/Navbar'
 import { abbrNum } from '../lib/format'
+import { defaultCommentSort } from '../lib/item'
+import { useRouter } from 'next/router'
 
-export function CommentsHeader ({ handleSort, pinned, commentSats }) {
-  const [sort, setSort] = useState(pinned ? 'recent' : 'hot')
+export function CommentsHeader ({ handleSort, pinned, bio, parentCreatedAt, commentSats }) {
+  const router = useRouter()
+  const sort = router.query.sort || defaultCommentSort(pinned, bio, parentCreatedAt)
 
   const getHandleClick = sort => {
     return () => {
-      setSort(sort)
       handleSort(sort)
     }
   }
 
   return (
-    <Navbar className='pt-1 pb-0'>
+    <Navbar className='pt-1 pb-0 px-3'>
       <Nav
         className={styles.navbarNav}
         activeKey={sort}
@@ -26,7 +25,7 @@ export function CommentsHeader ({ handleSort, pinned, commentSats }) {
         <Nav.Item className='text-muted'>
           {abbrNum(commentSats)} sats
         </Nav.Item>
-        <div className='ml-auto d-flex'>
+        <div className='ms-auto d-flex'>
           <Nav.Item>
             <Nav.Link
               eventKey='hot'
@@ -60,54 +59,27 @@ export function CommentsHeader ({ handleSort, pinned, commentSats }) {
   )
 }
 
-export default function Comments ({ parentId, pinned, commentSats, comments, ...props }) {
-  const client = useApolloClient()
-  useEffect(() => {
-    const hash = window.location.hash
-    if (hash) {
-      try {
-        document.querySelector(hash).scrollIntoView({ behavior: 'smooth' })
-      } catch {}
-    }
-  }, [typeof window !== 'undefined' && window.location.hash])
-  const [loading, setLoading] = useState()
-  const [getComments] = useLazyQuery(COMMENTS_QUERY, {
-    fetchPolicy: 'network-only',
-    onCompleted: data => {
-      client.writeFragment({
-        id: `Item:${parentId}`,
-        fragment: gql`
-          ${COMMENTS}
-          fragment Comments on Item {
-            comments {
-              ...CommentsRecursive
-            }
-          }
-        `,
-        fragmentName: 'Comments',
-        data: {
-          comments: data.comments
-        }
-      })
-      setLoading(false)
-    }
-  })
+export default function Comments ({ parentId, pinned, bio, parentCreatedAt, commentSats, comments, ...props }) {
+  const router = useRouter()
 
   return (
     <>
-      {comments.length
+      {comments?.length > 0
         ? <CommentsHeader
-            commentSats={commentSats} pinned={pinned} handleSort={sort => {
-              setLoading(true)
-              getComments({ variables: { id: parentId, sort } })
+            commentSats={commentSats} parentCreatedAt={parentCreatedAt}
+            pinned={pinned} bio={bio} handleSort={sort => {
+              const query = router.query
+              delete query.nodata
+              router.push({
+                pathname: router.pathname,
+                query: { ...router.query, sort }
+              }, undefined, { scroll: false })
             }}
           />
         : null}
-      {loading
-        ? <CommentsSkeleton />
-        : comments.map(item => (
-          <Comment depth={1} key={item.id} item={item} {...props} />
-        ))}
+      {comments.map(item => (
+        <Comment depth={1} key={item.id} item={item} {...props} />
+      ))}
     </>
   )
 }

@@ -1,108 +1,102 @@
 import '../styles/globals.scss'
-import { ApolloProvider, gql, useQuery } from '@apollo/client'
-import { Provider } from 'next-auth/client'
+import { ApolloProvider, gql } from '@apollo/client'
 import { MeProvider } from '../components/me'
 import PlausibleProvider from 'next-plausible'
 import getApolloClient from '../lib/apollo'
-import NextNProgress from 'nextjs-progressbar'
 import { PriceProvider } from '../components/price'
 import Head from 'next/head'
 import { useRouter } from 'next/dist/client/router'
 import { useEffect } from 'react'
-import Moon from '../svgs/moon-fill.svg'
-import Layout from '../components/layout'
 import { ShowModalProvider } from '../components/modal'
 import ErrorBoundary from '../components/error-boundary'
 import { LightningProvider } from '../components/lightning'
 import { ServiceWorkerProvider } from '../components/serviceworker'
+import { SSR } from '../lib/constants'
+import NProgress from 'nprogress'
+import 'nprogress/nprogress.css'
 
-function CSRWrapper ({ Component, apollo, ...props }) {
-  const { data, error } = useQuery(gql`${apollo.query}`, { variables: apollo.variables, fetchPolicy: 'cache-first' })
-  if (error) {
-    return (
-      <div className='d-flex font-weight-bold justify-content-center mt-3 mb-1'>
-        {error.toString()}
-      </div>
-    )
+NProgress.configure({
+  showSpinner: false
+})
+
+function writeQuery (client, apollo, data) {
+  if (apollo && data) {
+    client.writeQuery({
+      query: gql`${apollo.query}`,
+      data,
+      variables: apollo.variables,
+      overwrite: SSR,
+      broadcast: false
+    })
   }
-
-  if (!data) {
-    return (
-      <Layout>
-        <div className='d-flex justify-content-center mt-3 mb-1'>
-          <Moon className='spin fill-grey' />
-        </div>
-      </Layout>
-    )
-  }
-
-  return <Component {...props} data={data} />
 }
 
-function MyApp ({ Component, pageProps: { session, ...props } }) {
+function MyApp ({ Component, pageProps: { ...props } }) {
   const client = getApolloClient()
   const router = useRouter()
 
   useEffect(() => {
+    const nprogressStart = (_, { shallow }) => !shallow && NProgress.start()
+    const nprogressDone = (_, { shallow }) => !shallow && NProgress.done()
+
+    router.events.on('routeChangeStart', nprogressStart)
+    router.events.on('routeChangeComplete', nprogressDone)
+    router.events.on('routeChangeError', nprogressDone)
+
+    if (!props?.apollo) return
     // HACK: 'cause there's no way to tell Next to skip SSR
     // So every page load, we modify the route in browser history
     // to point to the same page but without SSR, ie ?nodata=true
     // this nodata var will get passed to the server on back/foward and
     // 1. prevent data from reloading and 2. perserve scroll
     // (2) is not possible while intercepting nav with beforePopState
-    if (router.isReady) {
-      router.replace({
-        pathname: router.pathname,
-        query: { ...router.query, nodata: true }
-      }, router.asPath, { ...router.options, scroll: false })
+    router.replace({
+      pathname: router.pathname,
+      query: { ...router.query, nodata: true }
+    }, router.asPath, { ...router.options, shallow: true }).catch((e) => {
+      // workaround for https://github.com/vercel/next.js/issues/37362
+      if (!e.cancelled) {
+        console.log(e)
+        throw e
+      }
+    })
+
+    return () => {
+      router.events.off('routeChangeStart', nprogressStart)
+      router.events.off('routeChangeComplete', nprogressDone)
+      router.events.off('routeChangeError', nprogressDone)
     }
-  }, [router.asPath])
+  }, [router.asPath, props?.apollo])
 
   /*
     If we are on the client, we populate the apollo cache with the
     ssr data
   */
-  const { apollo, data, me, price } = props
-  if (apollo && data) {
-    client.writeQuery({
-      query: gql`${apollo.query}`,
-      data: data,
-      variables: apollo.variables
-    })
-  }
+  const { apollo, ssrData, me, price, ...otherProps } = props
+  useEffect(() => {
+    writeQuery(client, apollo, ssrData)
+  }, [client, apollo, ssrData])
 
   return (
     <>
-      <NextNProgress
-        color='var(--primary)'
-        startPosition={0.3}
-        stopDelayMs={200}
-        height={2}
-        showOnShallow
-        options={{ showSpinner: false }}
-      />
       <Head>
         <meta name='viewport' content='initial-scale=1.0, width=device-width' />
       </Head>
       <ErrorBoundary>
         <PlausibleProvider domain='stacker.news' trackOutboundLinks>
-          <Provider session={session}>
-            <ApolloProvider client={client}>
-              <MeProvider me={me}>
-                <ServiceWorkerProvider>
-                  <PriceProvider price={price}>
-                    <LightningProvider>
-                      <ShowModalProvider>
-                        {data || !apollo?.query
-                          ? <Component {...props} />
-                          : <CSRWrapper Component={Component} {...props} />}
-                      </ShowModalProvider>
-                    </LightningProvider>
-                  </PriceProvider>
-                </ServiceWorkerProvider>
-              </MeProvider>
-            </ApolloProvider>
-          </Provider>
+          <ApolloProvider client={client}>
+            <MeProvider me={me}>
+              <ServiceWorkerProvider>
+                <PriceProvider price={price}>
+                  <LightningProvider>
+                    <ShowModalProvider>
+                      <Component ssrData={ssrData} {...otherProps} />
+                    </ShowModalProvider>
+                  </LightningProvider>
+                </PriceProvider>
+              </ServiceWorkerProvider>
+            </MeProvider>
+          </ApolloProvider>
         </PlausibleProvider>
       </ErrorBoundary>
     </>

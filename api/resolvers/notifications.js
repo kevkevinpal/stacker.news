@@ -1,4 +1,4 @@
-import { AuthenticationError, UserInputError } from 'apollo-server-micro'
+import { GraphQLError } from 'graphql'
 import { decodeCursor, LIMIT, nextCursorEncoded } from '../../lib/cursor'
 import { getItem, filterClause } from './item'
 import { getInvoice } from './wallet'
@@ -10,7 +10,7 @@ export default {
     notifications: async (parent, { cursor, inc }, { me, models }) => {
       const decodedCursor = decodeCursor(cursor)
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
       const meFull = await models.user.findUnique({ where: { id: me.id } })
@@ -194,7 +194,7 @@ export default {
       }
 
       // we do all this crazy subquery stuff to make 'reward' islands
-      const notifications = await models.$queryRaw(
+      const notifications = await models.$queryRawUnsafe(
         `SELECT MAX(id) AS id, MAX("sortTime") AS "sortTime", sum("earnedSats") AS "earnedSats", type,
             MIN("sortTime") AS "minSortTime"
         FROM
@@ -228,7 +228,7 @@ export default {
   Mutation: {
     savePushSubscription: async (parent, { endpoint, p256dh, auth, oldEndpoint }, { me, models }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
       await ssValidate(pushSubscriptionSchema, { endpoint, p256dh, auth })
@@ -250,14 +250,12 @@ export default {
     },
     deletePushSubscription: async (parent, { endpoint }, { me, models }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
       const subscription = await models.pushSubscription.findFirst({ where: { endpoint, userId: Number(me.id) } })
       if (!subscription) {
-        throw new UserInputError('endpoint not found', {
-          argumentName: 'endpoint'
-        })
+        throw new GraphQLError('endpoint not found', { extensions: { code: 'BAD_INPUT' } })
       }
       await models.pushSubscription.delete({ where: { id: subscription.id } })
       return subscription
@@ -288,7 +286,7 @@ export default {
   },
   Earn: {
     sources: async (n, args, { me, models }) => {
-      const [sources] = await models.$queryRaw(`
+      const [sources] = await models.$queryRawUnsafe(`
         SELECT
         FLOOR(sum(msats) FILTER(WHERE type = 'POST') / 1000) AS posts,
         FLOOR(sum(msats) FILTER(WHERE type = 'COMMENT') / 1000) AS comments,

@@ -1,12 +1,15 @@
 import { gql, useMutation, useQuery } from '@apollo/client'
-import { signIn } from 'next-auth/client'
+import { signIn } from 'next-auth/react'
 import { useEffect } from 'react'
-import { Col, Container, Row } from 'react-bootstrap'
+import Col from 'react-bootstrap/Col'
+import Container from 'react-bootstrap/Container'
+import Row from 'react-bootstrap/Row'
 import AccordianItem from './accordian-item'
 import Qr, { QrSkeleton } from './qr'
 import styles from './lightning-auth.module.css'
 import BackIcon from '../svgs/arrow-left-line.svg'
 import { useRouter } from 'next/router'
+import { SSR } from '../lib/constants'
 
 function QrAuth ({ k1, encodedUrl, slashtagUrl, callbackUrl }) {
   const query = gql`
@@ -16,11 +19,13 @@ function QrAuth ({ k1, encodedUrl, slashtagUrl, callbackUrl }) {
       k1
     }
   }`
-  const { data } = useQuery(query, { pollInterval: 1000 })
+  const { data } = useQuery(query, SSR ? {} : { pollInterval: 1000, nextFetchPolicy: 'cache-and-network' })
 
-  if (data && data.lnAuth.pubkey) {
-    signIn(encodedUrl ? 'lightning' : 'slashtags', { ...data.lnAuth, callbackUrl })
-  }
+  useEffect(() => {
+    if (data?.lnAuth?.pubkey) {
+      signIn(encodedUrl ? 'lightning' : 'slashtags', { ...data.lnAuth, callbackUrl })
+    }
+  }, [data?.lnAuth])
 
   // output pubkey and k1
   return (
@@ -37,9 +42,9 @@ function LightningExplainer ({ text, children }) {
         <h3 className='w-100 pb-2'>
           {text || 'Login'} with Lightning
         </h3>
-        <div className='font-weight-bold text-muted pb-4'>This is the most private way to use Stacker News. Just open your Lightning wallet and scan the QR code.</div>
+        <div className='fw-bold text-muted pb-4'>This is the most private way to use Stacker News. Just open your Lightning wallet and scan the QR code.</div>
         <Row className='w-100 text-muted'>
-          <Col className='pl-0 mb-4' md>
+          <Col className='ps-0 mb-4' md>
             <AccordianItem
               header={`Which wallets can I use to ${(text || 'Login').toLowerCase()}?`}
               body={

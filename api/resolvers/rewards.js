@@ -1,4 +1,4 @@
-import { AuthenticationError } from 'apollo-server-micro'
+import { GraphQLError } from 'graphql'
 import { amountSchema, ssValidate } from '../../lib/validate'
 import serialize from './serial'
 
@@ -11,6 +11,8 @@ export default {
           createdAt: 'desc'
         }
       })
+
+      if (!lastReward) return { total: 0, sources: [] }
 
       const [result] = await models.$queryRaw`
         SELECT coalesce(FLOOR(sum(sats)), 0) as total, json_build_array(
@@ -36,14 +38,14 @@ export default {
   Mutation: {
     donateToRewards: async (parent, { sats }, { me, models }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
       await ssValidate(amountSchema, { amount: sats })
 
       await serialize(models,
-        models.$queryRaw(
-          'SELECT donate($1, $2)',
+        models.$queryRawUnsafe(
+          'SELECT donate($1::INTEGER, $2::INTEGER)',
           sats, Number(me.id)))
 
       return sats

@@ -1,9 +1,11 @@
-import { ApolloServer } from 'apollo-server-micro'
+import { ApolloServer } from '@apollo/server'
+import { startServerAndCreateNextHandler } from '@as-integrations/next'
 import resolvers from '../../api/resolvers'
 import models from '../../api/models'
 import lnd from '../../api/lnd'
 import typeDefs from '../../api/typeDefs'
-import { getSession } from 'next-auth/client'
+import { getServerSession } from 'next-auth/next'
+import { getAuthOptions } from './auth/[...nextauth]'
 import search from '../../api/search'
 import slashtags from '../../api/slashtags'
 
@@ -13,28 +15,36 @@ const apolloServer = new ApolloServer({
   plugins: [{
     requestDidStart (initialRequestContext) {
       return {
-        executionDidStart (executionRequestContext) {
+        executionDidStart () {
           return {
             willResolveField ({ source, args, context, info }) {
               const start = process.hrtime.bigint()
               return (error, result) => {
                 const end = process.hrtime.bigint()
                 const ms = (end - start) / 1000000n
-                if (ms > 20 && info.parentType.name !== 'User') {
+                if (ms > 50) {
                   console.log(`Field ${info.parentType.name}.${info.fieldName} took ${ms}ms`)
                 }
                 if (error) {
-                  console.log(`It failed with ${error}`)
+                  console.log(`Field ${info.parentType.name}.${info.fieldName} failed with ${error}`)
                 }
+              }
+            },
+            async executionDidEnd (err) {
+              if (err) {
+                console.error('hey bud', err)
               }
             }
           }
         }
       }
     }
-  }],
-  context: async ({ req }) => {
-    const session = await getSession({ req })
+  }]
+})
+
+export default startServerAndCreateNextHandler(apolloServer, {
+  context: async (req, res) => {
+    const session = await getServerSession(req, res, getAuthOptions(req))
     return {
       models,
       lnd,
@@ -46,18 +56,3 @@ const apolloServer = new ApolloServer({
     }
   }
 })
-
-export const config = {
-  api: {
-    bodyParser: false
-  }
-}
-
-const startServer = apolloServer.start()
-
-export default async function handler (req, res) {
-  await startServer
-  await apolloServer.createHandler({
-    path: '/api/graphql'
-  })(req, res)
-}

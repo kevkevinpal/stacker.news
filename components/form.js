@@ -6,7 +6,10 @@ import { Formik, Form as FormikForm, useFormikContext, useField, FieldArray } fr
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import copy from 'clipboard-copy'
 import Thumb from '../svgs/thumb-up-fill.svg'
-import { Col, Dropdown as BootstrapDropdown, Nav } from 'react-bootstrap'
+import Col from 'react-bootstrap/Col'
+import Dropdown from 'react-bootstrap/Dropdown'
+import Nav from 'react-bootstrap/Nav'
+import Row from 'react-bootstrap/Row'
 import Markdown from '../svgs/markdown-line.svg'
 import styles from './form.module.css'
 import Text from '../components/text'
@@ -15,6 +18,7 @@ import { mdHas } from '../lib/md'
 import CloseIcon from '../svgs/close-line.svg'
 import { useLazyQuery } from '@apollo/client'
 import { USER_SEARCH } from '../fragments/users'
+import TextareaAutosize from 'react-textarea-autosize'
 
 export function SubmitButton ({
   children, variant, value, onClick, disabled, ...props
@@ -27,9 +31,9 @@ export function SubmitButton ({
       disabled={disabled || isSubmitting}
       onClick={value
         ? e => {
-            setFieldValue('submit', value)
-            onClick && onClick(e)
-          }
+          setFieldValue('submit', value)
+          onClick && onClick(e)
+        }
         : onClick}
       {...props}
     >
@@ -52,6 +56,7 @@ export function CopyInput (props) {
       onClick={handleClick}
       append={
         <Button
+          className={styles.appendButton}
           size={props.size}
           onClick={handleClick}
         >
@@ -67,7 +72,7 @@ export function InputSkeleton ({ label, hint }) {
   return (
     <BootstrapForm.Group>
       {label && <BootstrapForm.Label>{label}</BootstrapForm.Label>}
-      <div className='form-control clouds' />
+      <div className='form-control clouds' style={{ color: 'transparent' }}>.</div>
       {hint &&
         <BootstrapForm.Text>
           {hint}
@@ -81,6 +86,9 @@ export function MarkdownInput ({ label, topLevel, groupClassName, onChange, setH
   const [, meta, helpers] = useField(props)
   const [selectionRange, setSelectionRange] = useState({ start: 0, end: 0 })
   innerRef = innerRef || useRef(null)
+
+  props.as ||= TextareaAutosize
+  props.rows ||= props.minRows || 6
 
   useEffect(() => {
     !meta.value && setTab('write')
@@ -105,54 +113,59 @@ export function MarkdownInput ({ label, topLevel, groupClassName, onChange, setH
             <Nav.Link eventKey='preview' disabled={!meta.value}>preview</Nav.Link>
           </Nav.Item>
           <a
-            className='ml-auto text-muted d-flex align-items-center'
+            className='ms-auto text-muted d-flex align-items-center'
             href='https://guides.github.com/features/mastering-markdown/' target='_blank' rel='noreferrer'
           >
             <Markdown width={18} height={18} />
           </a>
         </Nav>
-        <div className={tab !== 'write' ? 'd-none' : ''}>
-          <InputInner
-            {...props} onChange={(formik, e) => {
-              if (onChange) onChange(formik, e)
-              if (setHasImgLink) {
-                setHasImgLink(mdHas(e.target.value, ['link', 'image']))
-              }
-            }}
-            innerRef={innerRef}
-            onKeyDown={(e) => {
-              const metaOrCtrl = e.metaKey || e.ctrlKey
-              if (metaOrCtrl) {
-                if (e.key === 'k') {
-                  // some browsers use CTRL+K to focus search bar so we have to prevent that behavior
-                  e.preventDefault()
-                  insertMarkdownLinkFormatting(innerRef.current, helpers.setValue, setSelectionRange)
-                }
-                if (e.key === 'b') {
-                  // some browsers use CTRL+B to open bookmarks so we have to prevent that behavior
-                  e.preventDefault()
-                  insertMarkdownBoldFormatting(innerRef.current, helpers.setValue, setSelectionRange)
-                }
-                if (e.key === 'i') {
-                  // some browsers might use CTRL+I to do something else so prevent that behavior too
-                  e.preventDefault()
-                  insertMarkdownItalicFormatting(innerRef.current, helpers.setValue, setSelectionRange)
-                }
-                if (e.key === 'Tab' && e.altKey) {
-                  e.preventDefault()
-                  insertMarkdownTabFormatting(innerRef.current, helpers.setValue, setSelectionRange)
-                }
-              }
+        {tab === 'write'
+          ? (
+            <div>
+              <InputInner
+                {...props} onChange={(formik, e) => {
+                  if (onChange) onChange(formik, e)
+                  if (setHasImgLink) {
+                    setHasImgLink(mdHas(e.target.value, ['link', 'image']))
+                  }
+                }}
+                innerRef={innerRef}
+                onKeyDown={(e) => {
+                  const metaOrCtrl = e.metaKey || e.ctrlKey
+                  if (metaOrCtrl) {
+                    if (e.key === 'k') {
+                      // some browsers use CTRL+K to focus search bar so we have to prevent that behavior
+                      e.preventDefault()
+                      insertMarkdownLinkFormatting(innerRef.current, helpers.setValue, setSelectionRange)
+                    }
+                    if (e.key === 'b') {
+                      // some browsers use CTRL+B to open bookmarks so we have to prevent that behavior
+                      e.preventDefault()
+                      insertMarkdownBoldFormatting(innerRef.current, helpers.setValue, setSelectionRange)
+                    }
+                    if (e.key === 'i') {
+                      // some browsers might use CTRL+I to do something else so prevent that behavior too
+                      e.preventDefault()
+                      insertMarkdownItalicFormatting(innerRef.current, helpers.setValue, setSelectionRange)
+                    }
+                    if (e.key === 'Tab' && e.altKey) {
+                      e.preventDefault()
+                      insertMarkdownTabFormatting(innerRef.current, helpers.setValue, setSelectionRange)
+                    }
+                  }
 
-              if (onKeyDown) onKeyDown(e)
-            }}
-          />
-        </div>
-        <div className={tab !== 'preview' ? 'd-none' : 'form-group'}>
-          <div className={`${styles.text} form-control`}>
-            {tab === 'preview' && <Text topLevel={topLevel} noFragments onlyImgProxy={false}>{meta.value}</Text>}
-          </div>
-        </div>
+                  if (onKeyDown) onKeyDown(e)
+                }}
+              />
+            </div>)
+          : (
+            <div className='form-group'>
+              <div className={`${styles.text} form-control`}>
+                <Text topLevel={topLevel} noFragments onlyImgProxy={false}>{meta.value}</Text>
+              </div>
+            </div>
+            )}
+
       </div>
     </FormGroup>
   )
@@ -197,7 +210,7 @@ const insertMarkdownItalicFormatting = insertMarkdownFormatting(
 
 function FormGroup ({ className, label, children }) {
   return (
-    <BootstrapForm.Group className={className}>
+    <BootstrapForm.Group className={`form-group ${className}`}>
       {label && <BootstrapForm.Label>{label}</BootstrapForm.Label>}
       {children}
     </BootstrapForm.Group>
@@ -218,10 +231,10 @@ function InputInner ({
     if (overrideValue) {
       helpers.setValue(overrideValue)
       if (storageKey) {
-        localStorage.setItem(storageKey, overrideValue)
+        window.localStorage.setItem(storageKey, overrideValue)
       }
     } else if (storageKey) {
-      const draft = localStorage.getItem(storageKey)
+      const draft = window.localStorage.getItem(storageKey)
       if (draft) {
         // for some reason we have to turn off validation to get formik to
         // not assume this is invalid
@@ -235,11 +248,7 @@ function InputInner ({
   return (
     <>
       <InputGroup hasValidation>
-        {prepend && (
-          <InputGroup.Prepend>
-            {prepend}
-          </InputGroup.Prepend>
-        )}
+        {prepend}
         <BootstrapForm.Control
           onKeyDown={(e) => {
             const metaOrCtrl = e.metaKey || e.ctrlKey
@@ -255,7 +264,7 @@ function InputInner ({
             field.onChange(e)
 
             if (storageKey) {
-              localStorage.setItem(storageKey, e.target.value)
+              window.localStorage.setItem(storageKey, e.target.value)
             }
 
             if (onChange) {
@@ -265,26 +274,22 @@ function InputInner ({
           isInvalid={invalid}
           isValid={showValid && meta.initialValue !== meta.value && meta.touched && !meta.error}
         />
-        {(append || (clear && field.value)) && (
-          <InputGroup.Append>
-            {(clear && field.value) &&
-              <Button
-                variant={null}
-                onClick={(e) => {
-                  helpers.setValue('')
-                  if (storageKey) {
-                    localStorage.removeItem(storageKey)
-                  }
-                  if (onChange) {
-                    onChange(formik, { target: { value: '' } })
-                  }
-                }}
-                className={`${styles.clearButton} ${invalid ? styles.isInvalid : ''}`}
-              ><CloseIcon className='fill-grey' height={20} width={20} />
-              </Button>}
-            {append}
-          </InputGroup.Append>
-        )}
+        {(clear && field.value) &&
+          <Button
+            variant={null}
+            onClick={(e) => {
+              helpers.setValue('')
+              if (storageKey) {
+                window.localStorage.removeItem(storageKey)
+              }
+              if (onChange) {
+                onChange(formik, { target: { value: '' } })
+              }
+            }}
+            className={`${styles.clearButton} ${styles.appendButton} ${invalid ? styles.isInvalid : ''}`}
+          ><CloseIcon className='fill-grey' height={20} width={20} />
+          </Button>}
+        {append}
         <BootstrapForm.Control.Feedback type='invalid'>
           {meta.touched && meta.error}
         </BootstrapForm.Control.Feedback>
@@ -300,7 +305,6 @@ function InputInner ({
 
 export function InputUserSuggest ({ label, groupClassName, ...props }) {
   const [getSuggestions] = useLazyQuery(USER_SEARCH, {
-    fetchPolicy: 'network-only',
     onCompleted: data => {
       setSuggestions({ array: data.searchUsers, index: 0 })
     }
@@ -349,10 +353,10 @@ export function InputUserSuggest ({ label, groupClassName, ...props }) {
           }
         }}
       />
-      <BootstrapDropdown show={suggestions.array.length > 0}>
-        <BootstrapDropdown.Menu className={styles.suggestionsMenu}>
+      <Dropdown show={suggestions.array.length > 0}>
+        <Dropdown.Menu className={styles.suggestionsMenu}>
           {suggestions.array.map((v, i) =>
-            <BootstrapDropdown.Item
+            <Dropdown.Item
               key={v.name}
               active={suggestions.index === i}
               onClick={() => {
@@ -361,9 +365,9 @@ export function InputUserSuggest ({ label, groupClassName, ...props }) {
               }}
             >
               {v.name}
-            </BootstrapDropdown.Item>)}
-        </BootstrapDropdown.Menu>
-      </BootstrapDropdown>
+            </Dropdown.Item>)}
+        </Dropdown.Menu>
+      </Dropdown>
     </FormGroup>
   )
 }
@@ -386,14 +390,14 @@ export function VariableInput ({ label, groupClassName, name, hint, max, min, re
             <>
               {options?.map((_, i) => (
                 <div key={i}>
-                  <BootstrapForm.Row className='mb-2'>
+                  <Row className='mb-2'>
                     <Col>
                       <InputInner name={`${name}[${i}]`} {...props} readOnly={i < readOnlyLen} placeholder={i >= min ? 'optional' : undefined} />
                     </Col>
                     {options.length - 1 === i && options.length !== max
-                      ? <AddIcon className='fill-grey align-self-center pointer mx-2' onClick={() => fieldArrayHelpers.push('')} />
+                      ? <Col className='d-flex ps-0' xs='auto'><AddIcon className='fill-grey align-self-center justify-self-center pointer' onClick={() => fieldArrayHelpers.push('')} /></Col>
                       : null}
-                  </BootstrapForm.Row>
+                  </Row>
                 </div>
               ))}
             </>
@@ -415,10 +419,9 @@ export function Checkbox ({ children, label, groupClassName, hiddenLabel, extra,
   // return the correct bag of props for you
   const [field,, helpers] = useField({ ...props, type: 'checkbox' })
   return (
-    <BootstrapForm.Group className={groupClassName}>
+    <FormGroup className={groupClassName}>
       {hiddenLabel && <BootstrapForm.Label className='invisible'>{label}</BootstrapForm.Label>}
       <BootstrapForm.Check
-        custom
         id={props.id || props.name}
         inline={inline}
       >
@@ -428,7 +431,7 @@ export function Checkbox ({ children, label, groupClassName, hiddenLabel, extra,
             handleChange && handleChange(e.target.checked, helpers.setValue)
           }}
         />
-        <BootstrapForm.Check.Label className={'d-flex' + (disabled ? ' text-muted' : '')}>
+        <BootstrapForm.Check.Label className={'d-inline-flex flex-nowrap align-items-center' + (disabled ? ' text-muted' : '')}>
           <div className='flex-grow-1'>{label}</div>
           {extra &&
             <div className={styles.checkboxExtra}>
@@ -436,7 +439,7 @@ export function Checkbox ({ children, label, groupClassName, hiddenLabel, extra,
             </div>}
         </BootstrapForm.Check.Label>
       </BootstrapForm.Check>
-    </BootstrapForm.Group>
+    </FormGroup>
   )
 }
 
@@ -457,10 +460,10 @@ export function Form ({
         onSubmit && onSubmit(values, ...args).then(() => {
           if (!storageKeyPrefix) return
           Object.keys(values).forEach(v => {
-            localStorage.removeItem(storageKeyPrefix + '-' + v)
+            window.localStorage.removeItem(storageKeyPrefix + '-' + v)
             if (Array.isArray(values[v])) {
               values[v].forEach(
-                (_, i) => localStorage.removeItem(`${storageKeyPrefix}-${v}[${i}]`))
+                (_, i) => window.localStorage.removeItem(`${storageKeyPrefix}-${v}[${i}]`))
             }
           }
           )
@@ -476,14 +479,20 @@ export function Form ({
   )
 }
 
-export function Select ({ label, items, groupClassName, onChange, noForm, ...props }) {
-  const [field, meta] = noForm ? [{}, {}] : useField(props)
+export function Select ({ label, items, groupClassName, onChange, noForm, overrideValue, ...props }) {
+  const [field, meta, helpers] = noForm ? [{}, {}, {}] : useField(props)
   const formik = noForm ? null : useFormikContext()
   const invalid = meta.touched && meta.error
+
+  useEffect(() => {
+    if (overrideValue) {
+      helpers.setValue(overrideValue)
+    }
+  }, [overrideValue])
+
   return (
     <FormGroup label={label} className={groupClassName}>
-      <BootstrapForm.Control
-        as='select'
+      <BootstrapForm.Select
         {...field} {...props}
         onChange={(e) => {
           if (field?.onChange) {
@@ -494,11 +503,10 @@ export function Select ({ label, items, groupClassName, onChange, noForm, ...pro
             onChange(formik, e)
           }
         }}
-        custom
         isInvalid={invalid}
       >
         {items.map(item => <option key={item}>{item}</option>)}
-      </BootstrapForm.Control>
+      </BootstrapForm.Select>
       <BootstrapForm.Control.Feedback type='invalid'>
         {meta.touched && meta.error}
       </BootstrapForm.Control.Feedback>

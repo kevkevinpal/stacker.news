@@ -18,7 +18,7 @@ export default function SubSelect ({ label, sub, setSub, item, ...props }) {
   const SubInfo = () => (
     <Info>
       <div>
-        <div className='font-weight-bold'>The sub your post will go in ...</div>
+        <div className='fw-bold'>The sub your post will go in ...</div>
         <ul>
           <li>If it's bitcoin related, put it in the bitcoin sub.</li>
           <li>If it's nostr related, put it in the nostr sub.</li>
@@ -29,6 +29,17 @@ export default function SubSelect ({ label, sub, setSub, item, ...props }) {
       </div>
     </Info>
   )
+
+  sub ||= router.query.sub || 'pick sub'
+  const extraProps = props.noForm
+    ? {
+        value: sub,
+        items: ['pick sub', ...SUBS]
+      }
+    : {
+        overrideValue: sub,
+        items: item ? SUBS_NO_JOBS : ['pick sub', ...SUBS_NO_JOBS]
+      }
 
   return (
     <Select
@@ -45,8 +56,7 @@ export default function SubSelect ({ label, sub, setSub, item, ...props }) {
       }}
       name='sub'
       size='sm'
-      defaultValue={props.noForm ? sub : undefined}
-      items={props.noForm ? ['pick sub', ...SUBS] : item ? SUBS_NO_JOBS : ['pick sub', ...SUBS_NO_JOBS]}
+      {...extraProps}
       label={label &&
         <>
           {label}

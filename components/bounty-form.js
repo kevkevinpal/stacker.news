@@ -1,11 +1,10 @@
 import { Form, Input, MarkdownInput, SubmitButton } from '../components/form'
 import { useRouter } from 'next/router'
 import { gql, useApolloClient, useMutation } from '@apollo/client'
-import TextareaAutosize from 'react-textarea-autosize'
 import Countdown from './countdown'
 import AdvPostForm, { AdvPostInitial } from './adv-post-form'
 import FeeButton, { EditFeeButton } from './fee-button'
-import { InputGroup } from 'react-bootstrap'
+import InputGroup from 'react-bootstrap/InputGroup'
 import { bountySchema } from '../lib/validate'
 import { SubSelectInitial } from './sub-select-form'
 import CancelButton from './cancel-button'
@@ -96,16 +95,15 @@ export function BountyForm ({
         topLevel
         label={
           <>
-            {textLabel} <small className='text-muted ml-2'>optional</small>
+            {textLabel} <small className='text-muted ms-2'>optional</small>
           </>
         }
         name='text'
-        as={TextareaAutosize}
         minRows={6}
         hint={
           editThreshold
             ? (
-              <div className='text-muted font-weight-bold'>
+              <div className='text-muted fw-bold'>
                 <Countdown date={editThreshold} />
               </div>
               )

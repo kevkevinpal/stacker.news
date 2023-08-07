@@ -1,4 +1,4 @@
-import { gql } from 'apollo-server-micro'
+import { gql } from 'graphql-tag'
 
 export default gql`
   extend type Query {
@@ -13,7 +13,7 @@ export default gql`
 
   type Invite {
     id: ID!
-    createdAt: String!
+    createdAt: Date!
     invitees: [User!]!
     gift: Int!
     limit: Int

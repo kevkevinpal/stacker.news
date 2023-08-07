@@ -1,28 +1,28 @@
-import { AuthenticationError } from 'apollo-server-micro'
+import { GraphQLError } from 'graphql'
 import { withClause, intervalClause, timeUnit } from './growth'
 
 export default {
   Query: {
     referrals: async (parent, { when }, { models, me }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
-      const [{ totalSats }] = await models.$queryRaw(`
+      const [{ totalSats }] = await models.$queryRawUnsafe(`
         SELECT COALESCE(FLOOR(sum(msats) / 1000), 0) as "totalSats"
         FROM "ReferralAct"
         WHERE ${intervalClause(when, 'ReferralAct', true)}
         "ReferralAct"."referrerId" = $1
       `, Number(me.id))
 
-      const [{ totalReferrals }] = await models.$queryRaw(`
-        SELECT count(*) as "totalReferrals"
+      const [{ totalReferrals }] = await models.$queryRawUnsafe(`
+        SELECT count(*)::INTEGER as "totalReferrals"
         FROM users
         WHERE ${intervalClause(when, 'users', true)}
         "referrerId" = $1
     `, Number(me.id))
 
-      const stats = await models.$queryRaw(
+      const stats = await models.$queryRawUnsafe(
         `${withClause(when)}
         SELECT time, json_build_array(
           json_build_object('name', 'referrals', 'value', count(*) FILTER (WHERE act = 'REFERREE')),

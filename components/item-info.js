@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
-import { Badge, Dropdown } from 'react-bootstrap'
+import Badge from 'react-bootstrap/Badge'
+import Dropdown from 'react-bootstrap/Dropdown'
 import Countdown from './countdown'
 import { abbrNum } from '../lib/format'
-import { newComments } from '../lib/new-comments'
+import { newComments, commentsViewedAt } from '../lib/new-comments'
 import { timeSince } from '../lib/time'
 import CowboyHat from './cowboy-hat'
 import { DeleteDropdownItem } from './delete'
@@ -41,43 +42,52 @@ export default function ItemInfo ({ item, pendingSats, full, commentsText, class
           <span>{abbrNum(item.boost)} boost</span>
           <span> \ </span>
         </>}
-      <Link href={`/items/${item.id}`} passHref>
-        <a title={`${item.commentSats} sats`} className='text-reset'>
-          {item.ncomments} {commentsText || 'comments'}
-          {hasNewComments && <>{' '}<Badge className={styles.newComment} variant={null}>new</Badge></>}
-        </a>
+      <Link
+        href={`/items/${item.id}`} onClick={(e) => {
+          const viewedAt = commentsViewedAt(item)
+          if (viewedAt) {
+            e.preventDefault()
+            router.push(
+              `/items/${item.id}?commentsViewedAt=${viewedAt}`,
+              `/items/${item.id}`)
+          }
+        }} title={`${item.commentSats} sats`} className='text-reset position-relative'
+      >
+        {item.ncomments} {commentsText || 'comments'}
+        {hasNewComments &&
+          <span className={styles.notification}>
+            <span className='invisible'>{' '}</span>
+          </span>}
       </Link>
       <span> \ </span>
       <span>
-        <Link href={`/${item.user.name}`} passHref>
-          <a className='d-inline-flex align-items-center'>
-            @{item.user.name}<CowboyHat className='ml-1 fill-grey' user={item.user} height={12} width={12} />
-            {embellishUser}
-          </a>
+        <Link href={`/${item.user.name}`}>
+          @{item.user.name}<CowboyHat className='ms-1 fill-grey' user={item.user} height={12} width={12} />
+          {embellishUser}
         </Link>
         <span> </span>
-        <Link href={`/items/${item.id}`} passHref>
-          <a title={item.createdAt} className='text-reset'>{timeSince(new Date(item.createdAt))}</a>
+        <Link href={`/items/${item.id}`} title={item.createdAt} className='text-reset' suppressHydrationWarning>
+          {timeSince(new Date(item.createdAt))}
         </Link>
         {item.prior &&
           <>
             <span> \ </span>
-            <Link href={`/items/${item.prior}`} passHref>
-              <a className='text-reset'>yesterday</a>
+            <Link href={`/items/${item.prior}`} className='text-reset'>
+              yesterday
             </Link>
           </>}
       </span>
       {item.subName &&
         <Link href={`/~${item.subName}`}>
-          <a>{' '}<Badge className={styles.newComment} variant={null}>{item.subName}</Badge></a>
+          {' '}<Badge className={styles.newComment} bg={null}>{item.subName}</Badge>
         </Link>}
       {(item.outlawed && !item.mine &&
-        <Link href='/outlawed'>
-          <a>{' '}<Badge className={styles.newComment} variant={null}>outlawed</Badge></a>
+        <Link href='/recent/outlawed'>
+          {' '}<Badge className={styles.newComment} bg={null}>outlawed</Badge>
         </Link>) ||
-        (item.freebie && !item.mine &&
-          <Link href='/freebie'>
-            <a>{' '}<Badge className={styles.newComment} variant={null}>freebie</Badge></a>
+        (item.freebie &&
+          <Link href='/recent/freebies'>
+            {' '}<Badge className={styles.newComment} bg={null}>freebie</Badge>
           </Link>
         )}
       {canEdit && !item.deletedAt &&
@@ -101,11 +111,9 @@ export default function ItemInfo ({ item, pendingSats, full, commentsText, class
         {me && <BookmarkDropdownItem item={item} />}
         {me && item.user.id !== me.id && <SubscribeDropdownItem item={item} />}
         {item.otsHash &&
-          <Dropdown.Item>
-            <Link passHref href={`/items/${item.id}/ots`}>
-              <a className='text-reset'>ots timestamp</a>
-            </Link>
-          </Dropdown.Item>}
+          <Link href={`/items/${item.id}/ots`} className='text-reset dropdown-item'>
+            ots timestamp
+          </Link>}
         {me && !item.meSats && !item.position && !item.meDontLike &&
           !item.mine && !item.deletedAt && <DontLikeThisDropdownItem id={item.id} />}
         {item.mine && !item.position && !item.deletedAt &&
@@ -118,9 +126,9 @@ export default function ItemInfo ({ item, pendingSats, full, commentsText, class
 
 export function ItemDropdown ({ children }) {
   return (
-    <Dropdown className='pointer' as='span'>
-      <Dropdown.Toggle variant='success' id='dropdown-basic' as='a'>
-        <MoreIcon className='fill-grey ml-1' height={16} width={16} />
+    <Dropdown className={`pointer ${styles.dropdown}`} as='span'>
+      <Dropdown.Toggle variant='success' as='a'>
+        <MoreIcon className='fill-grey ms-1' height={16} width={16} />
       </Dropdown.Toggle>
       <Dropdown.Menu>
         {children}

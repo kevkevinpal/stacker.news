@@ -1,14 +1,14 @@
 import styles from './text.module.css'
 import ReactMarkdown from 'react-markdown'
 import gfm from 'remark-gfm'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { atomDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
+import { LightAsync as SyntaxHighlighter } from 'react-syntax-highlighter'
+import atomDark from 'react-syntax-highlighter/dist/cjs/styles/prism/atom-dark'
 import mention from '../lib/remark-mention'
 import sub from '../lib/remark-sub'
 import remarkDirective from 'remark-directive'
 import { visit } from 'unist-util-visit'
 import reactStringReplace from 'react-string-replace'
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useRef, useEffect, useState, memo } from 'react'
 import GithubSlugger from 'github-slugger'
 import LinkIcon from '../svgs/link.svg'
 import Thumb from '../svgs/thumb-up-fill.svg'
@@ -16,8 +16,9 @@ import { toString } from 'mdast-util-to-string'
 import copy from 'clipboard-copy'
 import { IMGPROXY_URL_REGEXP, IMG_URL_REGEXP } from '../lib/url'
 import { extractUrls } from '../lib/md'
+import FileMissing from '../svgs/file-warning-line.svg'
 
-function myRemarkPlugin () {
+function searchHighlighter () {
   return (tree) => {
     visit(tree, (node) => {
       if (
@@ -41,7 +42,7 @@ function Heading ({ h, slugger, noFragments, topLevel, children, node, ...props 
   const Icon = copied ? Thumb : LinkIcon
 
   return (
-    <div className={styles.heading}>
+    <span className={styles.heading}>
       {React.createElement(h, { id, ...props }, children)}
       {!noFragments && topLevel &&
         <a className={`${styles.headingLink} ${copied ? styles.copied : ''}`} href={`#${id}`}>
@@ -58,7 +59,7 @@ function Heading ({ h, slugger, noFragments, topLevel, children, node, ...props 
             className='fill-grey'
           />
         </a>}
-    </div>
+    </span>
   )
 }
 
@@ -68,7 +69,8 @@ const CACHE_STATES = {
   IS_ERROR: 'IS_ERROR'
 }
 
-export default function Text ({ topLevel, noFragments, nofollow, onlyImgProxy, children }) {
+// this is one of the slowest components to render
+export default memo(function Text ({ topLevel, noFragments, nofollow, onlyImgProxy, children }) {
   // all the reactStringReplace calls are to facilitate search highlighting
   const slugger = new GithubSlugger()
   onlyImgProxy = onlyImgProxy ?? true
@@ -86,7 +88,7 @@ export default function Text ({ topLevel, noFragments, nofollow, onlyImgProxy, c
       if (imgRegexp.test(url)) {
         setUrlCache((prev) => ({ ...prev, [url]: CACHE_STATES.IS_LOADED }))
       } else if (!onlyImgProxy) {
-        const img = new Image()
+        const img = new window.Image()
         imgCache.current[url] = img
 
         setUrlCache((prev) => ({ ...prev, [url]: CACHE_STATES.IS_LOADING }))
@@ -121,14 +123,14 @@ export default function Text ({ topLevel, noFragments, nofollow, onlyImgProxy, c
           h5: (props) => HeadingWrapper({ h: topLevel ? 'h5' : 'h6', ...props }),
           h6: (props) => HeadingWrapper({ h: 'h6', ...props }),
           table: ({ node, ...props }) =>
-            <div className='table-responsive'>
+            <span className='table-responsive'>
               <table className='table table-bordered table-sm' {...props} />
-            </div>,
-          code ({ node, inline, className, children, ...props }) {
-            const match = /language-(\w+)/.exec(className || '')
+            </span>,
+          p: ({ children, ...props }) => <div className={styles.p} {...props}>{children}</div>,
+          code ({ node, inline, className, children, style, ...props }) {
             return !inline
               ? (
-                <SyntaxHighlighter showLineNumbers style={atomDark} language={match && match[1]} PreTag='div' {...props}>
+                <SyntaxHighlighter showLineNumbers style={atomDark} PreTag='div' {...props}>
                   {reactStringReplace(String(children).replace(/\n$/, ''), /:high\[([^\]]+)\]/g, (match, i) => {
                     return match
                   }).join('')}
@@ -155,8 +157,8 @@ export default function Text ({ topLevel, noFragments, nofollow, onlyImgProxy, c
             children = children?.map(e =>
               typeof e === 'string'
                 ? reactStringReplace(e, /:high\[([^\]]+)\]/g, (match, i) => {
-                    return <mark key={`mark-${match}-${i}`}>{match}</mark>
-                  })
+                  return <mark key={`mark-${match}-${i}`}>{match}</mark>
+                })
                 : e)
 
             return (
@@ -173,19 +175,16 @@ export default function Text ({ topLevel, noFragments, nofollow, onlyImgProxy, c
           },
           img: ({ node, ...props }) => <ZoomableImage topLevel={topLevel} {...props} />
         }}
-        remarkPlugins={[gfm, mention, sub, remarkDirective, myRemarkPlugin]}
+        remarkPlugins={[gfm, mention, sub, remarkDirective, searchHighlighter]}
       >
         {children}
       </ReactMarkdown>
     </div>
   )
-}
+})
 
 export function ZoomableImage ({ src, topLevel, ...props }) {
-  if (!src) {
-    return null
-  }
-
+  const [err, setErr] = useState()
   const defaultMediaStyle = {
     maxHeight: topLevel ? '75vh' : '25vh',
     cursor: 'zoom-in'
@@ -195,17 +194,17 @@ export function ZoomableImage ({ src, topLevel, ...props }) {
   const [mediaStyle, setMediaStyle] = useState(defaultMediaStyle)
   useEffect(() => {
     setMediaStyle(defaultMediaStyle)
+    setErr(null)
   }, [src])
 
-  const handleClick = () => {
-    if (mediaStyle.cursor === 'zoom-in') {
-      setMediaStyle({
-        width: '100%',
-        cursor: 'zoom-out'
-      })
-    } else {
-      setMediaStyle(defaultMediaStyle)
-    }
+  if (!src) return null
+  if (err) {
+    return (
+      <span className='d-flex align-items-baseline text-warning-emphasis fw-bold pb-1'>
+        <FileMissing width={18} height={18} className='fill-warning me-1 align-self-center' />
+        broken image <small className='ms-1'>stacker probably used an unreliable host</small>
+      </span>
+    )
   }
 
   return (
@@ -213,7 +212,17 @@ export function ZoomableImage ({ src, topLevel, ...props }) {
       className={topLevel ? styles.topLevel : undefined}
       style={mediaStyle}
       src={src}
-      onClick={handleClick}
+      onClick={() => {
+        if (mediaStyle.cursor === 'zoom-in') {
+          setMediaStyle({
+            width: '100%',
+            cursor: 'zoom-out'
+          })
+        } else {
+          setMediaStyle(defaultMediaStyle)
+        }
+      }}
+      onError={() => setErr(true)}
       {...props}
     />
   )

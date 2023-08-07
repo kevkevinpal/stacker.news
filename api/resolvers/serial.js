@@ -1,18 +1,18 @@
-const { UserInputError } = require('apollo-server-micro')
+const { GraphQLError } = require('graphql')
 const retry = require('async-retry')
+const Prisma = require('@prisma/client')
 
 async function serialize (models, call) {
   return await retry(async bail => {
     try {
-      const [, result] = await models.$transaction([
-        models.$executeRaw(SERIALIZE),
-        call
-      ])
+      const [, result] = await models.$transaction(
+        [models.$executeRaw`SELECT ASSERT_SERIALIZED()`, call],
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
       return result
     } catch (error) {
       console.log(error)
       if (error.message.includes('SN_INSUFFICIENT_FUNDS')) {
-        bail(new UserInputError('insufficient funds'))
+        bail(new GraphQLError('insufficient funds', { extensions: { code: 'BAD_INPUT' } }))
       }
       if (error.message.includes('SN_NOT_SERIALIZABLE')) {
         bail(new Error('wallet balance transaction is not serializable'))
@@ -35,17 +35,17 @@ async function serialize (models, call) {
       if (error.message.includes('SN_REVOKED_OR_EXHAUSTED')) {
         bail(new Error('faucet has been revoked or is exhausted'))
       }
-      if (error.message.includes('23514')) {
-        bail(new Error('constraint failure'))
-      }
       if (error.message.includes('SN_INV_PENDING_LIMIT')) {
         bail(new Error('too many pending invoices'))
       }
       if (error.message.includes('SN_INV_EXCEED_BALANCE')) {
         bail(new Error('pending invoices must not cause balance to exceed 1m sats'))
       }
-      if (error.message.includes('40001')) {
-        throw new Error('wallet balance serialization failure - retry again')
+      if (error.message.includes('40001') || error.code === 'P2034') {
+        throw new Error('wallet balance serialization failure - try again')
+      }
+      if (error.message.includes('23514') || ['P2002', 'P2003', 'P2004'].includes(error.code)) {
+        bail(new Error('constraint failure'))
       }
       bail(error)
     }
@@ -55,7 +55,5 @@ async function serialize (models, call) {
     retries: 5
   })
 }
-
-const SERIALIZE = 'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'
 
 module.exports = serialize

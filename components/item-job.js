@@ -1,6 +1,8 @@
-import * as Yup from 'yup'
+import { string } from 'yup'
 import Toc from './table-of-contents'
-import { Badge, Button, Image } from 'react-bootstrap'
+import Badge from 'react-bootstrap/Badge'
+import Button from 'react-bootstrap/Button'
+import Image from 'react-bootstrap/Image'
 import { SearchTitle } from './item'
 import styles from './item.module.css'
 import Link from 'next/link'
@@ -10,7 +12,7 @@ import Share from './share'
 import CowboyHat from './cowboy-hat'
 
 export default function ItemJob ({ item, toc, rank, children }) {
-  const isEmail = Yup.string().email().isValidSync(item.url)
+  const isEmail = string().email().isValidSync(item.url)
 
   return (
     <>
@@ -20,26 +22,22 @@ export default function ItemJob ({ item, toc, rank, children }) {
             {rank}
           </div>)
         : <div />}
-      <div className={`${styles.item}`}>
-        <Link href={`/items/${item.id}`} passHref>
-          <a>
-            <Image
-              src={item.uploadId ? `https://${process.env.NEXT_PUBLIC_AWS_UPLOAD_BUCKET}.s3.amazonaws.com/${item.uploadId}` : '/jobs-default.png'} width='42' height='42' className={styles.companyImage}
-            />
-          </a>
+      <div className={styles.item}>
+        <Link href={`/items/${item.id}`}>
+          <Image
+            src={item.uploadId ? `https://${process.env.NEXT_PUBLIC_AWS_UPLOAD_BUCKET}.s3.amazonaws.com/${item.uploadId}` : '/jobs-default.png'} width='42' height='42' className={styles.companyImage}
+          />
         </Link>
         <div className={`${styles.hunk} align-self-center mb-0`}>
           <div className={`${styles.main} flex-wrap d-inline`}>
-            <Link href={`/items/${item.id}`} passHref>
-              <a className={`${styles.title} text-reset mr-2`}>
-                {item.searchTitle
-                  ? <SearchTitle title={item.searchTitle} />
-                  : (
-                    <>{item.title}</>)}
-              </a>
+            <Link href={`/items/${item.id}`} className={`${styles.title} text-reset me-2`}>
+              {item.searchTitle
+                ? <SearchTitle title={item.searchTitle} />
+                : (
+                  <>{item.title}</>)}
             </Link>
           </div>
-          <div className={`${styles.other}`}>
+          <div className={styles.other}>
             {item.company &&
               <>
                 {item.company}
@@ -52,14 +50,12 @@ export default function ItemJob ({ item, toc, rank, children }) {
             <wbr />
             <span> \ </span>
             <span>
-              <Link href={`/${item.user.name}`} passHref>
-                <a className='d-inline-flex align-items-center'>
-                  @{item.user.name}<CowboyHat className='ml-1 fill-grey' user={item.user} height={12} width={12} />
-                </a>
+              <Link href={`/${item.user.name}`} className='d-inline-flex align-items-center'>
+                @{item.user.name}<CowboyHat className='ms-1 fill-grey' user={item.user} height={12} width={12} />
               </Link>
               <span> </span>
-              <Link href={`/items/${item.id}`} passHref>
-                <a title={item.createdAt} className='text-reset'>{timeSince(new Date(item.createdAt))}</a>
+              <Link href={`/items/${item.id}`} title={item.createdAt} className='text-reset' suppressHydrationWarning>
+                {timeSince(new Date(item.createdAt))}
               </Link>
             </span>
             {item.mine &&
@@ -67,14 +63,12 @@ export default function ItemJob ({ item, toc, rank, children }) {
                 <>
                   <wbr />
                   <span> \ </span>
-                  <Link href={`/items/${item.id}/edit`} passHref>
-                    <a className='text-reset'>
-                      edit
-                    </a>
+                  <Link href={`/items/${item.id}/edit`} className='text-reset'>
+                    edit
                   </Link>
-                  {item.status !== 'ACTIVE' && <span className='ml-1 font-weight-bold text-boost'> {item.status}</span>}
+                  {item.status !== 'ACTIVE' && <span className='ms-1 fw-bold text-boost'> {item.status}</span>}
                 </>)}
-            {item.maxBid > 0 && item.status === 'ACTIVE' && <Badge className={`${styles.newComment} ml-1`}>PROMOTED</Badge>}
+            {item.maxBid > 0 && item.status === 'ACTIVE' && <Badge className={`${styles.newComment} ms-1`}>PROMOTED</Badge>}
           </div>
         </div>
         {toc &&
@@ -84,14 +78,14 @@ export default function ItemJob ({ item, toc, rank, children }) {
           </>}
       </div>
       {children && (
-        <div className={`${styles.children}`} style={{ marginLeft: 'calc(42px + .8rem)' }}>
+        <div className={styles.children} style={{ marginLeft: 'calc(42px + .8rem)' }}>
           <div className='mb-3 d-flex'>
             <Button
               target='_blank' href={isEmail ? `mailto:${item.url}?subject=${encodeURIComponent(item.title)} via Stacker News` : item.url}
             >
-              apply {isEmail && <EmailIcon className='ml-1' />}
+              apply {isEmail && <EmailIcon className='ms-1' />}
             </Button>
-            {isEmail && <div className='ml-3 align-self-center text-muted font-weight-bold'>{item.url}</div>}
+            {isEmail && <div className='ms-3 align-self-center text-muted fw-bold'>{item.url}</div>}
           </div>
           {children}
         </div>

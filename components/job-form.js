@@ -1,6 +1,10 @@
 import { Checkbox, Form, Input, MarkdownInput, SubmitButton } from './form'
-import TextareaAutosize from 'react-textarea-autosize'
-import { InputGroup, Form as BForm, Col, Image } from 'react-bootstrap'
+import Row from 'react-bootstrap/Row'
+import Col from 'react-bootstrap/Col'
+import InputGroup from 'react-bootstrap/InputGroup'
+import Image from 'react-bootstrap/Image'
+import BootstrapForm from 'react-bootstrap/Form'
+import Alert from 'react-bootstrap/Alert'
 import { useEffect, useState } from 'react'
 import Info from './info'
 import AccordianItem from './accordian-item'
@@ -10,8 +14,6 @@ import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { usePrice } from './price'
 import Avatar from './avatar'
-import BootstrapForm from 'react-bootstrap/Form'
-import Alert from 'react-bootstrap/Alert'
 import ActionTooltip from './action-tooltip'
 import { jobSchema } from '../lib/validate'
 import CancelButton from './cancel-button'
@@ -116,7 +118,7 @@ export default function JobForm ({ item, sub }) {
           required
           clear
         />
-        <BForm.Row className='mr-0'>
+        <Row className='me-0'>
           <Col>
             <Input
               label='location'
@@ -124,26 +126,27 @@ export default function JobForm ({ item, sub }) {
               clear
             />
           </Col>
-          <Checkbox
-            label={<div className='font-weight-bold'>remote</div>} name='remote' hiddenLabel
-            groupClassName={styles.inlineCheckGroup}
-          />
-        </BForm.Row>
+          <Col className='d-flex ps-0' xs='auto'>
+            <Checkbox
+              label={<div className='fw-bold'>remote</div>} name='remote' hiddenLabel
+              groupClassName={styles.inlineCheckGroup}
+            />
+          </Col>
+        </Row>
         <MarkdownInput
           topLevel
           label='description'
           name='text'
-          as={TextareaAutosize}
           minRows={6}
           required
         />
         <Input
-          label={<>how to apply <small className='text-muted ml-2'>url or email address</small></>}
+          label={<>how to apply <small className='text-muted ms-2'>url or email address</small></>}
           name='url'
           required
           clear
         />
-        <PromoteJob item={item} sub={sub} storageKeyPrefix={storageKeyPrefix} />
+        <PromoteJob item={item} sub={sub} />
         {item && <StatusControl item={item} />}
         <div className='d-flex align-items-center justify-content-end mt-3'>
           {item
@@ -164,17 +167,17 @@ export default function JobForm ({ item, sub }) {
   )
 }
 
-function PromoteJob ({ item, sub, storageKeyPrefix }) {
+function PromoteJob ({ item, sub }) {
   const [monthly, setMonthly] = useState(satsMin2Mo(item?.maxBid || 0))
   const [getAuctionPosition, { data }] = useLazyQuery(gql`
     query AuctionPosition($id: ID, $bid: Int!) {
       auctionPosition(sub: "${item?.subName || sub?.name}", id: $id, bid: $bid)
     }`,
-  { fetchPolicy: 'network-only' })
+  { fetchPolicy: 'cache-and-network' })
   const position = data?.auctionPosition
 
   useEffect(() => {
-    const initialMaxBid = Number(item?.maxBid || localStorage.getItem(storageKeyPrefix + '-maxBid')) || 0
+    const initialMaxBid = Number(item?.maxBid) || 0
     getAuctionPosition({ variables: { id: item?.id, bid: initialMaxBid } })
     setMonthly(satsMin2Mo(initialMaxBid))
   }, [])
@@ -189,14 +192,14 @@ function PromoteJob ({ item, sub, storageKeyPrefix }) {
             label={
               <div className='d-flex align-items-center'>bid
                 <Info>
-                  <ol className='font-weight-bold'>
+                  <ol className='fw-bold'>
                     <li>The higher your bid the higher your job will rank</li>
                     <li>You can increase, decrease, or remove your bid at anytime</li>
                     <li>You can edit or stop your job at anytime</li>
                     <li>If you run out of sats, your job will stop being promoted until you fill your wallet again</li>
                   </ol>
                 </Info>
-                <small className='text-muted ml-2'>optional</small>
+                <small className='text-muted ms-2'>optional</small>
               </div>
           }
             name='maxBid'
@@ -210,9 +213,8 @@ function PromoteJob ({ item, sub, storageKeyPrefix }) {
             }}
             append={<InputGroup.Text className='text-monospace'>sats/min</InputGroup.Text>}
             hint={<PriceHint monthly={monthly} />}
-            storageKeyPrefix={storageKeyPrefix}
           />
-          <><div className='font-weight-bold text-muted'>This bid puts your job in position: {position}</div></>
+          <><div className='fw-bold text-muted'>This bid puts your job in position: {position}</div></>
         </>
   }
     />
@@ -229,10 +231,10 @@ function StatusControl ({ item }) {
 
           <AccordianItem
             header={<div style={{ fontWeight: 'bold', fontSize: '92%' }}>I want to stop my job</div>}
-            headerColor='var(--danger)'
+            headerColor='var(--bs-danger)'
             body={
               <Checkbox
-                label={<div className='font-weight-bold text-danger'>stop my job</div>} name='stop' inline
+                label={<div className='fw-bold text-danger'>stop my job</div>} name='stop' inline
               />
           }
           />
@@ -244,10 +246,10 @@ function StatusControl ({ item }) {
       return (
         <AccordianItem
           header={<div style={{ fontWeight: 'bold', fontSize: '92%' }}>I want to resume my job</div>}
-          headerColor='var(--success)'
+          headerColor='var(--bs-success)'
           body={
             <Checkbox
-              label={<div className='font-weight-bold text-success'>resume my job</div>} name='start' inline
+              label={<div className='fw-bold text-success'>resume my job</div>} name='start' inline
             />
           }
         />
@@ -260,7 +262,7 @@ function StatusControl ({ item }) {
       <div className='p-3'>
         <BootstrapForm.Label>job control</BootstrapForm.Label>
         {item.status === 'NOSATS' &&
-          <Alert variant='warning'>your promotion ran out of sats. <Link href='/wallet?type=fund' passHref><a className='text-reset text-underline'>fund your wallet</a></Link> or reduce bid to continue promoting your job</Alert>}
+          <Alert variant='warning'>your promotion ran out of sats. <Link href='/wallet?type=fund' className='text-reset text-underline'>fund your wallet</Link> or reduce bid to continue promoting your job</Alert>}
         <StatusComp />
       </div>
     </div>

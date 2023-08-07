@@ -21,12 +21,15 @@ const commitHash = isProd
 
 module.exports = withPlausibleProxy()({
   env: {
-    NEXT_PUBLIC_COMMIT_HASH: commitHash
+    NEXT_PUBLIC_COMMIT_HASH: commitHash,
+    NEXT_PUBLIC_LND_CONNECT_ADDRESS: process.env.LND_CONNECT_ADDRESS,
+    NEXT_PUBLIC_ASSET_PREFIX: isProd ? 'https://a.stacker.news' : ''
   },
   compress: false,
   experimental: {
     scrollRestoration: true
   },
+  reactStrictMode: true,
   generateBuildId: isProd ? async () => commitHash : undefined,
   // Use the CDN in production and localhost for development.
   assetPrefix: isProd ? 'https://a.stacker.news' : undefined,
@@ -38,26 +41,19 @@ module.exports = withPlausibleProxy()({
         headers: corsHeaders
       },
       {
-        source: '/darkmode.js',
-        headers: [
-          ...corsHeaders
-        ]
-      },
-      {
-        source: '/Lightningvolt-xoqm.ttf',
-        headers: [
-          ...corsHeaders,
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable'
-          }
-        ]
-      },
-      {
         source: '/.well-known/:slug*',
         headers: [
           ...corsHeaders
         ]
+      },
+      // never cache service worker
+      // https://stackoverflow.com/questions/38843970/service-worker-javascript-update-frequency-every-24-hours/38854905#38854905
+      {
+        source: '/sw.js',
+        headers: [{
+          key: 'Cache-Control',
+          value: 'no-cache'
+        }]
       },
       {
         source: '/api/lnauth',
@@ -70,7 +66,23 @@ module.exports = withPlausibleProxy()({
         headers: [
           ...corsHeaders
         ]
-      }
+      },
+      {
+        source: '/api/lnwith',
+        headers: [
+          ...corsHeaders
+        ]
+      },
+      ...['tff', 'woff', 'woff2'].map(ext => ({
+        source: `/Lightningvolt-xoqm.${ext}`,
+        headers: [
+          ...corsHeaders,
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable'
+          }
+        ]
+      }))
     ]
   },
   async rewrites () {
@@ -112,13 +124,14 @@ module.exports = withPlausibleProxy()({
         destination: '/api/web-app-origin-association'
       },
       {
-        source: '/~:sub',
-        destination: '/~/:sub'
+        source: '/~:sub/:slug*\\?:query*',
+        destination: '/~/:slug*?:query*&sub=:sub'
       },
       {
         source: '/~:sub/:slug*',
-        destination: '/~/:sub/:slug*'
-      }
+        destination: '/~/:slug*?sub=:sub'
+      },
+      ...['/', '/post', '/search', '/rss', '/recent/:slug*', '/top/:slug*'].map(source => ({ source, destination: '/~' + source }))
     ]
   },
   async redirects () {
@@ -130,19 +143,34 @@ module.exports = withPlausibleProxy()({
       }
     ]
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
     if (isServer) {
       generatePrecacheManifest()
-      config.plugins.push(
-        new InjectManifest({
-          // ignore the precached manifest which includes the webpack assets
-          // since they are not useful to us
-          exclude: [/.*/],
-          // by default, webpack saves service worker at .next/server/
-          swDest: '../../public/sw.js',
-          swSrc: './sw/index.js'
+      const workboxPlugin = new InjectManifest({
+        // ignore the precached manifest which includes the webpack assets
+        // since they are not useful to us
+        exclude: [/.*/],
+        // by default, webpack saves service worker at .next/server/
+        swDest: '../../public/sw.js',
+        swSrc: './sw/index.js'
+      })
+      if (dev) {
+        // Suppress the "InjectManifest has been called multiple times" warning by reaching into
+        // the private properties of the plugin and making sure it never ends up in the state
+        // where it makes that warning.
+        // https://github.com/GoogleChrome/workbox/blob/v6/packages/workbox-webpack-plugin/src/inject-manifest.ts#L260-L282
+        Object.defineProperty(workboxPlugin, 'alreadyCalled', {
+          get () {
+            return false
+          },
+          set () {
+            // do nothing; the internals try to set it to true, which then results in a warning
+            // on the next run of webpack.
+          }
         })
-      )
+      }
+
+      config.plugins.push(workboxPlugin)
     }
     return config
   }

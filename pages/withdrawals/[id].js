@@ -1,17 +1,18 @@
 import { useQuery } from '@apollo/client'
-import LayoutCenter from '../../components/layout-center'
+import { CenterLayout } from '../../components/layout'
 import { CopyInput, Input, InputSkeleton } from '../../components/form'
 import InputGroup from 'react-bootstrap/InputGroup'
 import InvoiceStatus from '../../components/invoice-status'
 import { useRouter } from 'next/router'
 import { WITHDRAWL } from '../../fragments/wallet'
 import Link from 'next/link'
+import { SSR } from '../../lib/constants'
 
 export default function Withdrawl () {
   return (
-    <LayoutCenter>
+    <CenterLayout>
       <LoadWithdrawl />
-    </LayoutCenter>
+    </CenterLayout>
   )
 }
 
@@ -31,18 +32,21 @@ export function WithdrawlSkeleton ({ status }) {
 
 function LoadWithdrawl () {
   const router = useRouter()
-  const { loading, error, data } = useQuery(WITHDRAWL, {
-    variables: { id: router.query.id },
-    pollInterval: 1000
-  })
+  const { loading, error, data } = useQuery(WITHDRAWL, SSR
+    ? {}
+    : {
+        variables: { id: router.query.id },
+        pollInterval: 1000,
+        nextFetchPolicy: 'cache-and-network'
+      })
   if (error) return <div>error</div>
   if (!data || loading) {
     return <WithdrawlSkeleton status='loading' />
   }
 
   const TryMaxFee = () =>
-    <Link href='/wallet?type=withdraw' passHref>
-      <a className='text-reset text-underline'><small className='ml-3'>try increasing max fee</small></a>
+    <Link href='/wallet?type=withdraw' className='text-reset text-underline'>
+      <small className='ms-3'>try increasing max fee</small>
     </Link>
 
   let status = 'pending'
@@ -53,7 +57,7 @@ function LoadWithdrawl () {
       variant = 'confirmed'
       break
     case 'INSUFFICIENT_BALANCE':
-      status = <>insufficient balance <small className='ml-3'>contact keyan!</small></>
+      status = <>insufficient balance <small className='ms-3'>contact keyan!</small></>
       variant = 'failed'
       break
     case 'INVALID_PAYMENT':

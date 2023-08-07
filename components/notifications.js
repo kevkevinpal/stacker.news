@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from '@apollo/client'
 import Comment, { CommentSkeleton } from './comment'
 import Item from './item'
 import ItemJob from './item-job'
 import { NOTIFICATIONS } from '../fragments/notifications'
-import { useRouter } from 'next/router'
 import MoreFooter from './more-footer'
 import Invite from './invite'
 import { ignoreClick } from '../lib/clicks'
@@ -16,33 +15,51 @@ import { COMMENT_DEPTH_LIMIT } from '../lib/constants'
 import CowboyHatIcon from '../svgs/cowboy.svg'
 import BaldIcon from '../svgs/bald.svg'
 import { RootProvider } from './root'
-import { Alert } from 'react-bootstrap'
+import Alert from 'react-bootstrap/Alert'
 import styles from './notifications.module.css'
 import { useServiceWorker } from './serviceworker'
 import { Checkbox, Form } from './form'
+import { useRouter } from 'next/router'
+import { useData } from './use-data'
 
-function Notification ({ n }) {
-  switch (n.__typename) {
-    case 'Earn': return <EarnNotification n={n} />
-    case 'Invitification': return <Invitification n={n} />
-    case 'InvoicePaid': return <InvoicePaid n={n} />
-    case 'Referral': return <Referral n={n} />
-    case 'Streak': return <Streak n={n} />
-    case 'Votification': return <Votification n={n} />
-    case 'Mention': return <Mention n={n} />
-    case 'JobChanged': return <JobChanged n={n} />
-    case 'Reply': return <Reply n={n} />
-  }
-  console.error('__typename not supported:', n.__typename)
-  return null
+function Notification ({ n, fresh }) {
+  const type = n.__typename
+
+  return (
+    <NotificationLayout nid={nid(n)} {...defaultOnClick(n)} fresh={fresh}>
+      {
+        (type === 'Earn' && <EarnNotification n={n} />) ||
+        (type === 'Invitification' && <Invitification n={n} />) ||
+        (type === 'InvoicePaid' && <InvoicePaid n={n} />) ||
+        (type === 'Referral' && <Referral n={n} />) ||
+        (type === 'Streak' && <Streak n={n} />) ||
+        (type === 'Votification' && <Votification n={n} />) ||
+        (type === 'Mention' && <Mention n={n} />) ||
+        (type === 'JobChanged' && <JobChanged n={n} />) ||
+        (type === 'Reply' && <Reply n={n} />)
+      }
+    </NotificationLayout>
+  )
 }
 
-function NotificationLayout ({ children, onClick }) {
+function NotificationLayout ({ children, nid, href, as, fresh }) {
+  const router = useRouter()
+  if (!href) return <div className={fresh ? styles.fresh : ''}>{children}</div>
   return (
     <div
-      className='clickToContext' onClick={(e) => {
+      className={
+        `clickToContext ${fresh ? styles.fresh : ''} ${router?.query?.nid === nid ? 'outline-it' : ''}`
+      }
+      onClick={async (e) => {
         if (ignoreClick(e)) return
-        onClick?.(e)
+        nid && await router.replace({
+          pathname: router.pathname,
+          query: {
+            ...router.query,
+            nid
+          }
+        }, router.asPath, { ...router.options, shallow: true })
+        router.push(href, as)
       }}
     >
       {children}
@@ -50,26 +67,43 @@ function NotificationLayout ({ children, onClick }) {
   )
 }
 
-const defaultOnClick = (n, router) => () => {
+const defaultOnClick = n => {
+  const type = n.__typename
+  if (type === 'Earn') return {}
+  if (type === 'Invitification') return { href: '/invites' }
+  if (type === 'InvoicePaid') return { href: `/invoices/${n.invoice.id}` }
+  if (type === 'Referral') return { href: '/referrals/month' }
+  if (type === 'Streak') return {}
+
+  // Votification, Mention, JobChanged, Reply all have item
   if (!n.item.title) {
     const path = n.item.path.split('.')
     if (path.length > COMMENT_DEPTH_LIMIT + 1) {
       const rootId = path.slice(-(COMMENT_DEPTH_LIMIT + 1))[0]
-      router.push({
-        pathname: '/items/[id]',
-        query: { id: rootId, commentId: n.item.id }
-      }, `/items/${rootId}`)
+      return {
+        href: {
+          pathname: '/items/[id]',
+          query: { id: rootId, commentId: n.item.id }
+        },
+        as: `/items/${rootId}`
+      }
     } else {
-      router.push({
-        pathname: '/items/[id]',
-        query: { id: n.item.root.id, commentId: n.item.id }
-      }, `/items/${n.item.root.id}`)
+      return {
+        href: {
+          pathname: '/items/[id]',
+          query: { id: n.item.root.id, commentId: n.item.id }
+        },
+        as: `/items/${n.item.root.id}`
+      }
     }
   } else {
-    router.push({
-      pathname: '/items/[id]',
-      query: { id: n.item.id }
-    }, `/items/${n.item.id}`)
+    return {
+      href: {
+        pathname: '/items/[id]',
+        query: { id: n.item.id }
+      },
+      as: `/items/${n.item.id}`
+    }
   }
 }
 
@@ -102,9 +136,9 @@ function Streak ({ n }) {
   }
 
   return (
-    <div className='d-flex font-weight-bold ml-2 py-1'>
+    <div className='d-flex fw-bold ms-2 py-1'>
       <div style={{ fontSize: '2rem' }}>{n.days ? <BaldIcon className='fill-grey' height={40} width={40} /> : <CowboyHatIcon className='fill-grey' height={40} width={40} />}</div>
-      <div className='ml-1 p-1'>
+      <div className='ms-1 p-1'>
         you {n.days ? 'lost your' : 'found a'} cowboy hat
         <div><small style={{ lineHeight: '140%', display: 'inline-block' }}>{blurb(n)}</small></div>
       </div>
@@ -114,37 +148,34 @@ function Streak ({ n }) {
 
 function EarnNotification ({ n }) {
   return (
-    <NotificationLayout>
-      <div className='d-flex'>
-        <HandCoin className='align-self-center fill-boost mx-1' width={24} height={24} style={{ flex: '0 0 24px', transform: 'rotateY(180deg)' }} />
-        <div className='ml-2'>
-          <div className='font-weight-bold text-boost'>
-            you stacked {n.earnedSats} sats in rewards<small className='text-muted ml-1'>{timeSince(new Date(n.sortTime))}</small>
-          </div>
-          {n.sources &&
-            <div style={{ fontSize: '80%', color: 'var(--theme-grey)' }}>
-              {n.sources.posts > 0 && <span>{n.sources.posts} sats for top posts</span>}
-              {n.sources.comments > 0 && <span>{n.sources.posts > 0 && ' \\ '}{n.sources.comments} sats for top comments</span>}
-              {n.sources.tipPosts > 0 && <span>{(n.sources.comments > 0 || n.sources.posts > 0) && ' \\ '}{n.sources.tipPosts} sats for zapping top posts early</span>}
-              {n.sources.tipComments > 0 && <span>{(n.sources.comments > 0 || n.sources.posts > 0 || n.sources.tipPosts > 0) && ' \\ '}{n.sources.tipComments} sats for zapping top comments early</span>}
-            </div>}
-          <div className='pb-1' style={{ lineHeight: '140%' }}>
-            SN distributes the sats it earns back to its best stackers daily. These sats come from <Link href='/~jobs' passHref><a>jobs</a></Link>, boosts, posting fees, and donations. You can see the daily rewards pool and make a donation <Link href='/rewards' passHref><a>here</a></Link>.
-          </div>
+    <div className='d-flex ms-2 py-1'>
+      <HandCoin className='align-self-center fill-boost mx-1' width={24} height={24} style={{ flex: '0 0 24px', transform: 'rotateY(180deg)' }} />
+      <div className='ms-2'>
+        <div className='fw-bold text-boost'>
+          you stacked {n.earnedSats} sats in rewards<small className='text-muted ms-1 fw-normal' suppressHydrationWarning>{timeSince(new Date(n.sortTime))}</small>
+        </div>
+        {n.sources &&
+          <div style={{ fontSize: '80%', color: 'var(--theme-grey)' }}>
+            {n.sources.posts > 0 && <span>{n.sources.posts} sats for top posts</span>}
+            {n.sources.comments > 0 && <span>{n.sources.posts > 0 && ' \\ '}{n.sources.comments} sats for top comments</span>}
+            {n.sources.tipPosts > 0 && <span>{(n.sources.comments > 0 || n.sources.posts > 0) && ' \\ '}{n.sources.tipPosts} sats for zapping top posts early</span>}
+            {n.sources.tipComments > 0 && <span>{(n.sources.comments > 0 || n.sources.posts > 0 || n.sources.tipPosts > 0) && ' \\ '}{n.sources.tipComments} sats for zapping top comments early</span>}
+          </div>}
+        <div className='pb-1' style={{ lineHeight: '140%' }}>
+          SN distributes the sats it earns back to its best stackers daily. These sats come from <Link href='/~jobs'>jobs</Link>, boosts, posting fees, and donations. You can see the daily rewards pool and make a donation <Link href='/rewards'>here</Link>.
         </div>
       </div>
-    </NotificationLayout>
+    </div>
   )
 }
 
 function Invitification ({ n }) {
-  const router = useRouter()
   return (
-    <NotificationLayout onClick={() => router.push('/invites')}>
-      <small className='font-weight-bold text-secondary ml-2'>
+    <>
+      <small className='fw-bold text-secondary ms-2'>
         your invite has been redeemed by {n.invite.invitees.length} stackers
       </small>
-      <div className='ml-4 mr-2 mt-1'>
+      <div className='ms-4 me-2 mt-1'>
         <Invite
           invite={n.invite} active={
           !n.invite.revoked &&
@@ -152,38 +183,32 @@ function Invitification ({ n }) {
         }
         />
       </div>
-    </NotificationLayout>
+    </>
   )
 }
 
 function InvoicePaid ({ n }) {
-  const router = useRouter()
   return (
-    <NotificationLayout onClick={() => router.push(`/invoices/${n.invoice.id}`)}>
-      <div className='font-weight-bold text-info ml-2 py-1'>
-        <Check className='fill-info mr-1' />{n.earnedSats} sats were deposited in your account
-        <small className='text-muted ml-1'>{timeSince(new Date(n.sortTime))}</small>
-      </div>
-    </NotificationLayout>
+    <div className='fw-bold text-info ms-2 py-1'>
+      <Check className='fill-info me-1' />{n.earnedSats} sats were deposited in your account
+      <small className='text-muted ms-1 fw-normal' suppressHydrationWarning>{timeSince(new Date(n.sortTime))}</small>
+    </div>
   )
 }
 
 function Referral ({ n }) {
   return (
-    <NotificationLayout>
-      <small className='font-weight-bold text-secondary ml-2'>
-        someone joined via one of your <Link href='/referrals/month' passHref><a className='text-reset'>referral links</a></Link>
-        <small className='text-muted ml-1'>{timeSince(new Date(n.sortTime))}</small>
-      </small>
-    </NotificationLayout>
+    <small className='fw-bold text-secondary ms-2'>
+      someone joined via one of your referral links
+      <small className='text-muted ms-1 fw-normal' suppressHydrationWarning>{timeSince(new Date(n.sortTime))}</small>
+    </small>
   )
 }
 
 function Votification ({ n }) {
-  const router = useRouter()
   return (
-    <NotificationLayout onClick={defaultOnClick(n, router)}>
-      <small className='font-weight-bold text-success ml-2'>
+    <>
+      <small className='fw-bold text-success ms-2'>
         your {n.item.title ? 'post' : 'reply'} {n.item.fwdUser ? 'forwarded' : 'stacked'} {n.earnedSats} sats{n.item.fwdUser && ` to @${n.item.fwdUser.name}`}
       </small>
       <div>
@@ -197,15 +222,14 @@ function Votification ({ n }) {
             </div>
             )}
       </div>
-    </NotificationLayout>
+    </>
   )
 }
 
 function Mention ({ n }) {
-  const router = useRouter()
   return (
-    <NotificationLayout onClick={defaultOnClick(n, router)}>
-      <small className='font-weight-bold text-info ml-2'>
+    <>
+      <small className='fw-bold text-info ms-2'>
         you were mentioned in
       </small>
       <div>
@@ -218,15 +242,14 @@ function Mention ({ n }) {
               </RootProvider>
             </div>)}
       </div>
-    </NotificationLayout>
+    </>
   )
 }
 
 function JobChanged ({ n }) {
-  const router = useRouter()
   return (
-    <NotificationLayout onClick={defaultOnClick(n, router)}>
-      <small className={`font-weight-bold text-${n.item.status === 'ACTIVE' ? 'success' : 'boost'} ml-1`}>
+    <>
+      <small className={`fw-bold text-${n.item.status === 'ACTIVE' ? 'success' : 'boost'} ms-1`}>
         {n.item.status === 'ACTIVE'
           ? 'your job is active again'
           : (n.item.status === 'NOSATS'
@@ -234,30 +257,27 @@ function JobChanged ({ n }) {
               : 'your job has been stopped')}
       </small>
       <ItemJob item={n.item} />
-    </NotificationLayout>
+    </>
   )
 }
 
 function Reply ({ n }) {
-  const router = useRouter()
   return (
-    <NotificationLayout onClick={defaultOnClick(n, router)} rootText='replying on:'>
-      <div className='py-2'>
-        {n.item.title
-          ? <Item item={n.item} />
-          : (
-            <div className='pb-2'>
-              <RootProvider root={n.item.root}>
-                <Comment item={n.item} noReply includeParent clickToContext rootText='replying on:' />
-              </RootProvider>
-            </div>
-            )}
-      </div>
-    </NotificationLayout>
+    <div className='py-2'>
+      {n.item.title
+        ? <Item item={n.item} />
+        : (
+          <div className='pb-2'>
+            <RootProvider root={n.item.root}>
+              <Comment item={n.item} noReply includeParent clickToContext rootText='replying on:' />
+            </RootProvider>
+          </div>
+          )}
+    </div>
   )
 }
 
-function NotificationAlert () {
+export function NotificationAlert () {
   const [showAlert, setShowAlert] = useState(false)
   const [hasSubscription, setHasSubscription] = useState(false)
   const [error, setError] = useState(null)
@@ -268,16 +288,14 @@ function NotificationAlert () {
     const isSupported = sw.support.serviceWorker && sw.support.pushManager && sw.support.notification
     if (isSupported) {
       const isDefaultPermission = sw.permission.notification === 'default'
-      setShowAlert(isDefaultPermission && !localStorage.getItem('hideNotifyPrompt'))
+      setShowAlert(isDefaultPermission && !window.localStorage.getItem('hideNotifyPrompt'))
       sw.registration?.pushManager.getSubscription().then(subscription => setHasSubscription(!!subscription))
       setSupported(true)
     }
   }, [sw])
 
-  if (!supported) return null
-
   const close = () => {
-    localStorage.setItem('hideNotifyPrompt', 'yep')
+    window.localStorage.setItem('hideNotifyPrompt', 'yep')
     setShowAlert(false)
   }
 
@@ -301,14 +319,14 @@ function NotificationAlert () {
               }}
             >Yes
             </button>
-            <button className={`${styles.alertBtn}`} onClick={close}>No</button>
+            <button className={styles.alertBtn} onClick={close}>No</button>
           </Alert>
           )
         : (
-          <Form className='d-flex justify-content-end' initial={{ pushNotify: hasSubscription }}>
+          <Form className={`d-flex justify-content-end ${supported ? 'visible' : 'invisible'}`} initial={{ pushNotify: hasSubscription }}>
             <Checkbox
               name='pushNotify' label={<span className='text-muted'>push notifications</span>}
-              groupClassName={`${styles.subFormGroup} mb-1 mr-sm-3 mr-0`}
+              groupClassName={`${styles.subFormGroup} mb-1 me-sm-3 me-0`}
               inline checked={hasSubscription} handleChange={async () => {
                 await sw.togglePushSubscription().catch(setError)
               }}
@@ -318,34 +336,40 @@ function NotificationAlert () {
   )
 }
 
-export default function Notifications ({ notifications, earn, cursor, lastChecked, variables }) {
-  const { data, fetchMore } = useQuery(NOTIFICATIONS, { variables })
+const nid = n => n.__typename + n.id + n.sortTime
 
-  if (data) {
-    ({ notifications: { notifications, earn, cursor } } = data)
-  }
+export default function Notifications ({ ssrData }) {
+  const { data, fetchMore } = useQuery(NOTIFICATIONS)
+  const router = useRouter()
+  const dat = useData(data, ssrData)
 
-  const [fresh, old] =
-    notifications.reduce((result, n) => {
-      result[new Date(n.sortTime).getTime() > lastChecked ? 0 : 1].push(n)
-      return result
-    },
-    [[], []])
+  const { notifications: { notifications, lastChecked, cursor } } = useMemo(() => {
+    return dat || { notifications: {} }
+  }, [dat])
+
+  useEffect(() => {
+    if (lastChecked && !router?.query?.checkedAt) {
+      router.replace({
+        pathname: router.pathname,
+        query: {
+          ...router.query,
+          nodata: true, // make sure nodata is set so we don't fetch on back/forward
+          checkedAt: lastChecked
+        }
+      }, router.asPath, { ...router.options, shallow: true })
+    }
+  }, [router, lastChecked])
+
+  if (!dat) return <CommentsFlatSkeleton />
 
   return (
     <>
-      <NotificationAlert />
-      {/* XXX we shouldn't use the index but we don't have a unique id in this union yet */}
-      <div className='fresh'>
-        {earn && <Notification n={earn} key='earn' />}
-        {fresh.map((n, i) => (
-          <Notification n={n} key={i} />
-        ))}
-      </div>
-      {old.map((n, i) => (
-        <Notification n={n} key={i} />
-      ))}
-      <MoreFooter cursor={cursor} fetchMore={fetchMore} Skeleton={CommentsFlatSkeleton} />
+      {notifications.map(n =>
+        <Notification
+          n={n} key={nid(n)}
+          fresh={new Date(n.sortTime) > new Date(router?.query?.checkedAt)}
+        />)}
+      <MoreFooter cursor={cursor} count={notifications?.length} fetchMore={fetchMore} Skeleton={CommentsFlatSkeleton} noMoreText='NO MORE' />
     </>
   )
 }
@@ -354,9 +378,10 @@ function CommentsFlatSkeleton () {
   const comments = new Array(21).fill(null)
 
   return (
-    <div>{comments.map((_, i) => (
-      <CommentSkeleton key={i} skeletonChildren={0} />
-    ))}
+    <div>
+      {comments.map((_, i) => (
+        <CommentSkeleton key={i} skeletonChildren={0} />
+      ))}
     </div>
   )
 }

@@ -7,7 +7,9 @@
 
 .upvoteWrapper {
     position: relative;
-    padding-right: .2rem;
+    margin-right: .2rem;
+    padding-left: .2rem;
+    margin-left: -.4rem;
 }
 
 .noSelfTips {
@@ -25,7 +27,7 @@
 }
 
 .cover {
-    background: var(--theme-body);
+    background: var(--bs-body-bg);
     width: 100%;
     overflow: hidden;
     mix-blend-mode: color;

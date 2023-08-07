@@ -1,6 +1,6 @@
 import { gql } from '@apollo/client'
-import { COMMENT_FIELDS } from './comments'
-import { ITEM_FIELDS, ITEM_FULL_FIELDS, ITEM_WITH_COMMENTS } from './items'
+import { COMMENTS, COMMENTS_ITEM_EXT_FIELDS } from './comments'
+import { ITEM_FIELDS, ITEM_FULL_FIELDS } from './items'
 
 export const ME = gql`
   {
@@ -116,35 +116,27 @@ gql`
       stacked
       spent
       ncomments
-      nitems
+      nposts
       referrals
     }
   }`
 
 export const USER_FIELDS = gql`
-  ${ITEM_FIELDS}
   fragment UserFields on User {
     id
-    createdAt
     name
     streak
     maxStreak
     hideCowboyHat
     nitems
-    ncomments
-    nbookmarks
     stacked
-    sats
+    since
     photoId
-    bio {
-      ...ItemFields
-      text
-    }
   }`
 
 export const TOP_USERS = gql`
-  query TopUsers($cursor: String, $when: String, $sort: String) {
-    topUsers(cursor: $cursor, when: $when, sort: $sort) {
+  query TopUsers($cursor: String, $when: String, $by: String) {
+    topUsers(cursor: $cursor, when: $when, by: $by) {
       users {
         name
         streak
@@ -153,7 +145,7 @@ export const TOP_USERS = gql`
         stacked(when: $when)
         spent(when: $when)
         ncomments(when: $when)
-        nitems(when: $when)
+        nposts(when: $when)
         referrals(when: $when)
       }
       cursor
@@ -172,7 +164,7 @@ export const TOP_COWBOYS = gql`
         stacked(when: "forever")
         spent(when: "forever")
         ncomments(when: "forever")
-        nitems(when: "forever")
+        nposts(when: "forever")
         referrals(when: "forever")
       }
       cursor
@@ -182,78 +174,33 @@ export const TOP_COWBOYS = gql`
 
 export const USER_FULL = gql`
   ${USER_FIELDS}
-  ${ITEM_WITH_COMMENTS}
-  query User($name: String!) {
+  ${ITEM_FULL_FIELDS}
+  ${COMMENTS}
+  query User($name: String!, $sort: String) {
     user(name: $name) {
       ...UserFields
-      since
       bio {
-        ...ItemWithComments
+        ...ItemFullFields
+        comments(sort: $sort) {
+          ...CommentsRecursive
+        }
       }
   }
 }`
 
-export const USER_WITH_COMMENTS = gql`
-  ${USER_FIELDS}
-  ${COMMENT_FIELDS}
-  query UserWithComments($name: String!) {
-    user(name: $name) {
-      ...UserFields
-      since
-    }
-    moreFlatComments(sort: "user", name: $name) {
-      cursor
-      comments {
-        ...CommentFields
-        root {
-          id
-          title
-          bounty
-          bountyPaidTo
-          subName
-          user {
-            name
-            streak
-            hideCowboyHat
-            id
-          }
-        }
-      }
-    }
-  }`
-
-export const USER_WITH_BOOKMARKS = gql`
-  ${USER_FIELDS}
-  ${ITEM_FULL_FIELDS}
-  query UserWithBookmarks($name: String!, $cursor: String) {
-    user(name: $name) {
-      ...UserFields
-      since
-    }
-    moreBookmarks(name: $name, cursor: $cursor) {
-      cursor
-      items {
-        ...ItemFullFields
-      }
-    }
-  }
-`
-
-export const USER_WITH_POSTS = gql`
+export const USER_WITH_ITEMS = gql`
   ${USER_FIELDS}
   ${ITEM_FIELDS}
-  query UserWithPosts($name: String!) {
+  ${COMMENTS_ITEM_EXT_FIELDS}
+  query UserWithItems($name: String!, $sub: String, $cursor: String, $type: String, $when: String, $by: String, $limit: Int, $includeComments: Boolean = false) {
     user(name: $name) {
       ...UserFields
-      since
     }
-    items(sort: "user", name: $name) {
+    items(sub: $sub, sort: "user", cursor: $cursor, type: $type, name: $name, when: $when, by: $by, limit: $limit) {
       cursor
       items {
         ...ItemFields
-      }
-      pins {
-        ...ItemFields
+        ...CommentItemExtFields @include(if: $includeComments)
       }
     }
   }`

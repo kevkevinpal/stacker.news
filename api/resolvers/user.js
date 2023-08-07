@@ -1,9 +1,10 @@
-import { AuthenticationError, UserInputError } from 'apollo-server-errors'
+import { GraphQLError } from 'graphql'
 import { decodeCursor, LIMIT, nextCursorEncoded } from '../../lib/cursor'
 import { msatsToSats } from '../../lib/format'
 import { bioSchema, emailSchema, settingsSchema, ssValidate, userSchema } from '../../lib/validate'
 import { createMentions, getItem, SELECT, updateItem, filterClause } from './item'
 import serialize from './serial'
+import { dayPivot } from '../../lib/time'
 
 export function within (table, within) {
   let interval = ' AND "' + table + '".created_at >= $1 - INTERVAL '
@@ -53,13 +54,13 @@ export function viewWithin (table, within) {
 export function withinDate (within) {
   switch (within) {
     case 'day':
-      return new Date(new Date().setDate(new Date().getDate() - 1))
+      return dayPivot(new Date(), -1)
     case 'week':
-      return new Date(new Date().setDate(new Date().getDate() - 7))
+      return dayPivot(new Date(), -7)
     case 'month':
-      return new Date(new Date().setDate(new Date().getDate() - 30))
+      return dayPivot(new Date(), -30)
     case 'year':
-      return new Date(new Date().setDate(new Date().getDate() - 365))
+      return dayPivot(new Date(), -365)
     default:
       return new Date(0)
   }
@@ -72,7 +73,7 @@ async function authMethods (user, args, { models, me }) {
     }
   })
 
-  const oauth = accounts.map(a => a.providerId)
+  const oauth = accounts.map(a => a.provider)
 
   return {
     lightning: !!user.pubkey,
@@ -86,7 +87,7 @@ async function authMethods (user, args, { models, me }) {
 export default {
   Query: {
     me: async (parent, { skipUpdate }, { models, me }) => {
-      if (!me) {
+      if (!me?.id) {
         return null
       }
 
@@ -97,7 +98,7 @@ export default {
     },
     settings: async (parent, args, { models, me }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
       return await models.user.findUnique({ where: { id: me.id } })
@@ -109,7 +110,7 @@ export default {
       await models.user.findMany(),
     nameAvailable: async (parent, { name }, { models, me }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
       const user = await models.user.findUnique({ where: { id: me.id } })
@@ -118,9 +119,9 @@ export default {
     },
     topCowboys: async (parent, { cursor }, { models, me }) => {
       const decodedCursor = decodeCursor(cursor)
-      const users = await models.$queryRaw(`
+      const users = await models.$queryRawUnsafe(`
         SELECT users.*, floor(sum(msats_spent)/1000) as spent,
-          sum(posts) as nitems, sum(comments) as ncomments, sum(referrals) as referrals,
+          sum(posts) as nposts, sum(comments) as ncomments, sum(referrals) as referrals,
           floor(sum(msats_stacked)/1000) as stacked
           FROM users
           LEFT JOIN user_stats_days on users.id = user_stats_days.id
@@ -134,24 +135,24 @@ export default {
         users
       }
     },
-    topUsers: async (parent, { cursor, when, sort }, { models, me }) => {
+    topUsers: async (parent, { cursor, when, by }, { models, me }) => {
       const decodedCursor = decodeCursor(cursor)
       let users
 
       if (when !== 'day') {
         let column
-        switch (sort) {
+        switch (by) {
           case 'spent': column = 'spent'; break
-          case 'posts': column = 'nitems'; break
+          case 'posts': column = 'nposts'; break
           case 'comments': column = 'ncomments'; break
           case 'referrals': column = 'referrals'; break
           default: column = 'stacked'; break
         }
 
-        users = await models.$queryRaw(`
+        users = await models.$queryRawUnsafe(`
           WITH u AS (
             SELECT users.*, floor(sum(msats_spent)/1000) as spent,
-            sum(posts) as nitems, sum(comments) as ncomments, sum(referrals) as referrals,
+            sum(posts) as nposts, sum(comments) as ncomments, sum(referrals) as referrals,
             floor(sum(msats_stacked)/1000) as stacked
             FROM user_stats_days
             JOIN users on users.id = user_stats_days.id
@@ -170,8 +171,8 @@ export default {
         }
       }
 
-      if (sort === 'spent') {
-        users = await models.$queryRaw(`
+      if (by === 'spent') {
+        users = await models.$queryRawUnsafe(`
           SELECT users.*, sum(sats_spent) as spent
           FROM
           ((SELECT "userId", floor(sum("ItemAct".msats)/1000) as sats_spent
@@ -190,21 +191,21 @@ export default {
           ORDER BY spent DESC NULLS LAST, users.created_at DESC
           OFFSET $2
           LIMIT ${LIMIT}`, decodedCursor.time, decodedCursor.offset)
-      } else if (sort === 'posts') {
-        users = await models.$queryRaw(`
-        SELECT users.*, count(*) as nitems
+      } else if (by === 'posts') {
+        users = await models.$queryRawUnsafe(`
+        SELECT users.*, count(*)::INTEGER as nposts
           FROM users
           JOIN "Item" on "Item"."userId" = users.id
           WHERE "Item".created_at <= $1 AND "Item"."parentId" IS NULL
           AND NOT users."hideFromTopUsers"
           ${within('Item', when)}
           GROUP BY users.id
-          ORDER BY nitems DESC NULLS LAST, users.created_at DESC
+          ORDER BY nposts DESC NULLS LAST, users.created_at DESC
           OFFSET $2
           LIMIT ${LIMIT}`, decodedCursor.time, decodedCursor.offset)
-      } else if (sort === 'comments') {
-        users = await models.$queryRaw(`
-        SELECT users.*, count(*) as ncomments
+      } else if (by === 'comments') {
+        users = await models.$queryRawUnsafe(`
+        SELECT users.*, count(*)::INTEGER as ncomments
           FROM users
           JOIN "Item" on "Item"."userId" = users.id
           WHERE "Item".created_at <= $1 AND "Item"."parentId" IS NOT NULL
@@ -214,9 +215,9 @@ export default {
           ORDER BY ncomments DESC NULLS LAST, users.created_at DESC
           OFFSET $2
           LIMIT ${LIMIT}`, decodedCursor.time, decodedCursor.offset)
-      } else if (sort === 'referrals') {
-        users = await models.$queryRaw(`
-          SELECT users.*, count(*) as referrals
+      } else if (by === 'referrals') {
+        users = await models.$queryRawUnsafe(`
+          SELECT users.*, count(*)::INTEGER as referrals
           FROM users
           JOIN "users" referree on users.id = referree."referrerId"
           WHERE referree.created_at <= $1
@@ -227,7 +228,7 @@ export default {
           OFFSET $2
           LIMIT ${LIMIT}`, decodedCursor.time, decodedCursor.offset)
       } else {
-        users = await models.$queryRaw(`
+        users = await models.$queryRawUnsafe(`
           SELECT u.id, u.name, u.streak, u."photoId", u."hideCowboyHat", floor(sum(amount)/1000) as stacked
           FROM
           ((SELECT users.*, "ItemAct".msats as amount
@@ -269,7 +270,7 @@ export default {
 
       // check if any votes have been cast for them since checkedNotesAt
       if (user.noteItemSats) {
-        const votes = await models.$queryRaw(`
+        const votes = await models.$queryRawUnsafe(`
         SELECT 1
           FROM "Item"
           JOIN "ItemAct" ON
@@ -285,7 +286,7 @@ export default {
       }
 
       // check if they have any replies since checkedNotesAt
-      const newReplies = await models.$queryRaw(`
+      const newReplies = await models.$queryRawUnsafe(`
         SELECT 1
           FROM "Item"
           JOIN "Item" p ON
@@ -301,7 +302,7 @@ export default {
       }
 
       // break out thread subscription to decrease the search space of the already expensive reply query
-      const newtsubs = await models.$queryRaw(`
+      const newtsubs = await models.$queryRawUnsafe(`
       SELECT 1
         FROM "ThreadSubscription"
         JOIN "Item" p ON "ThreadSubscription"."itemId" = p.id
@@ -317,7 +318,7 @@ export default {
 
       // check if they have any mentions since checkedNotesAt
       if (user.noteMentions) {
-        const newMentions = await models.$queryRaw(`
+        const newMentions = await models.$queryRawUnsafe(`
         SELECT "Item".id, "Item".created_at
           FROM "Mention"
           JOIN "Item" ON "Mention"."itemId" = "Item".id
@@ -378,7 +379,7 @@ export default {
 
       // check if new invites have been redeemed
       if (user.noteInvites) {
-        const newInvitees = await models.$queryRaw(`
+        const newInvitees = await models.$queryRawUnsafe(`
         SELECT "Invite".id
           FROM users JOIN "Invite" on users."inviteId" = "Invite".id
           WHERE "Invite"."userId" = $1
@@ -427,23 +428,24 @@ export default {
   Mutation: {
     setName: async (parent, data, { me, models }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
       await ssValidate(userSchema, data, models)
 
       try {
         await models.user.update({ where: { id: me.id }, data })
+        return data.name
       } catch (error) {
         if (error.code === 'P2002') {
-          throw new UserInputError('name taken')
+          throw new GraphQLError('name taken', { extensions: { code: 'BAD_INPUT' } })
         }
         throw error
       }
     },
     setSettings: async (parent, { nostrRelays, ...data }, { me, models }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
       await ssValidate(settingsSchema, { nostrRelays, ...data })
@@ -469,7 +471,7 @@ export default {
     },
     setWalkthrough: async (parent, { upvotePopover, tipPopover }, { me, models }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
       await models.user.update({ where: { id: me.id }, data: { upvotePopover, tipPopover } })
@@ -478,7 +480,7 @@ export default {
     },
     setPhoto: async (parent, { photoId }, { me, models }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
       await models.user.update({
@@ -490,7 +492,7 @@ export default {
     },
     upsertBio: async (parent, { bio }, { me, models }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
       await ssValidate(bioSchema, { bio })
@@ -501,7 +503,7 @@ export default {
         await updateItem(parent, { id: user.bioId, data: { text: bio, title: `@${user.name}'s bio` } }, { me, models })
       } else {
         const [item] = await serialize(models,
-          models.$queryRaw(`${SELECT} FROM create_bio($1, $2, $3) AS "Item"`,
+          models.$queryRawUnsafe(`${SELECT} FROM create_bio($1, $2, $3::INTEGER) AS "Item"`,
             `@${user.name}'s bio`, bio, Number(me.id)))
         await createMentions(item, models)
       }
@@ -510,15 +512,15 @@ export default {
     },
     unlinkAuth: async (parent, { authType }, { models, me }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
       let user
       if (authType === 'twitter' || authType === 'github') {
         user = await models.user.findUnique({ where: { id: me.id } })
-        const account = await models.account.findFirst({ where: { userId: me.id, providerId: authType } })
+        const account = await models.account.findFirst({ where: { userId: me.id, provider: authType } })
         if (!account) {
-          throw new UserInputError('no such account')
+          throw new GraphQLError('no such account', { extensions: { code: 'BAD_INPUT' } })
         }
         await models.account.delete({ where: { id: account.id } })
       } else if (authType === 'lightning') {
@@ -528,14 +530,14 @@ export default {
       } else if (authType === 'email') {
         user = await models.user.update({ where: { id: me.id }, data: { email: null, emailVerified: null } })
       } else {
-        throw new UserInputError('no such account')
+        throw new GraphQLError('no such account', { extensions: { code: 'BAD_INPUT' } })
       }
 
       return await authMethods(user, undefined, { models, me })
     },
     linkUnverifiedEmail: async (parent, { email }, { models, me }) => {
       if (!me) {
-        throw new AuthenticationError('you must be logged in')
+        throw new GraphQLError('you must be logged in', { extensions: { code: 'UNAUTHENTICATED' } })
       }
 
       await ssValidate(emailSchema, { email })
@@ -547,7 +549,7 @@ export default {
         })
       } catch (error) {
         if (error.code === 'P2002') {
-          throw new UserInputError('email taken')
+          throw new GraphQLError('email taken', { extensions: { code: 'BAD_INPUT' } })
         }
         throw error
       }
@@ -577,8 +579,22 @@ export default {
       return max
     },
     nitems: async (user, { when }, { models }) => {
-      if (typeof user.nitems === 'number') {
+      if (typeof user.nitems !== 'undefined') {
         return user.nitems
+      }
+
+      return await models.item.count({
+        where: {
+          userId: user.id,
+          createdAt: {
+            gte: withinDate(when)
+          }
+        }
+      })
+    },
+    nposts: async (user, { when }, { models }) => {
+      if (typeof user.nposts !== 'undefined') {
+        return user.nposts
       }
 
       return await models.item.count({
@@ -592,7 +608,7 @@ export default {
       })
     },
     ncomments: async (user, { when }, { models }) => {
-      if (typeof user.ncomments === 'number') {
+      if (typeof user.ncomments !== 'undefined') {
         return user.ncomments
       }
 
@@ -607,7 +623,7 @@ export default {
       })
     },
     nbookmarks: async (user, { when }, { models }) => {
-      if (typeof user.nBookmarks === 'number') {
+      if (typeof user.nBookmarks !== 'undefined') {
         return user.nBookmarks
       }
 
@@ -621,7 +637,7 @@ export default {
       })
     },
     stacked: async (user, { when }, { models }) => {
-      if (typeof user.stacked === 'number') {
+      if (typeof user.stacked !== 'undefined') {
         return user.stacked
       }
 
@@ -629,7 +645,7 @@ export default {
         // forever
         return (user.stackedMsats && msatsToSats(user.stackedMsats)) || 0
       } else if (when === 'day') {
-        const [{ stacked }] = await models.$queryRaw(`
+        const [{ stacked }] = await models.$queryRawUnsafe(`
           SELECT sum(amount) as stacked
           FROM
           ((SELECT coalesce(sum("ItemAct".msats),0) as amount
@@ -653,12 +669,12 @@ export default {
       return 0
     },
     spent: async (user, { when }, { models }) => {
-      if (typeof user.spent === 'number') {
+      if (typeof user.spent !== 'undefined') {
         return user.spent
       }
 
-      const { sum: { msats } } = await models.itemAct.aggregate({
-        sum: {
+      const { _sum: { msats } } = await models.itemAct.aggregate({
+        _sum: {
           msats: true
         },
         where: {
@@ -672,9 +688,10 @@ export default {
       return (msats && msatsToSats(msats)) || 0
     },
     referrals: async (user, { when }, { models }) => {
-      if (typeof user.referrals === 'number') {
+      if (typeof user.referrals !== 'undefined') {
         return user.referrals
       }
+
       return await models.user.count({
         where: {
           referrerId: user.id,

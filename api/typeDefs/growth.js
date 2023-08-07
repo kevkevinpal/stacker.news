@@ -1,4 +1,4 @@
-import { gql } from 'apollo-server-micro'
+import { gql } from 'graphql-tag'
 
 export default gql`
   type NameValue {
@@ -16,7 +16,7 @@ export default gql`
   }
 
   type TimeData {
-    time: String!
+    time: Date!
     data: [NameValue!]!
   }
 `

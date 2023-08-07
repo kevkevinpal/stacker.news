@@ -1,4 +1,5 @@
-import { Button, Container } from 'react-bootstrap'
+import Button from 'react-bootstrap/Button'
+import Container from 'react-bootstrap/Container'
 import styles from './search.module.css'
 import SearchIcon from '../svgs/search-line.svg'
 import CloseIcon from '../svgs/close-line.svg'
@@ -34,13 +35,16 @@ export default function Search ({ sub }) {
         await router.push({
           pathname: '/stackers/search',
           query: { q, what: 'stackers' }
+        }, {
+          pathname: '/stackers/search',
+          query: { q }
         })
         return
       }
 
-      if (values.what === '') delete values.what
-      if (values.sort === '') delete values.sort
-      if (values.when === '') delete values.when
+      if (values.what === '' || values.what === 'all') delete values.what
+      if (values.sort === '' || values.sort === 'match') delete values.sort
+      if (values.when === '' || values.when === 'forever') delete values.when
       await router.push({
         pathname: prefix + '/search',
         query: values
@@ -50,32 +54,32 @@ export default function Search ({ sub }) {
 
   const showSearch = atBottom || searching || router.query.q
   const filter = sub !== 'jobs'
+  const what = router.pathname.startsWith('/stackers') ? 'stackers' : router.query.what || 'all'
+  const sort = router.query.sort || 'match'
+  const when = router.query.when || 'forever'
+
   return (
     <>
       <div className={`${styles.searchSection} ${showSearch ? styles.solid : styles.hidden}`}>
-        <Container className={`px-sm-0 ${styles.searchContainer} ${filter ? styles.leaveRoom : ''}`}>
+        <Container className={`px-md-0 ${styles.searchContainer} ${filter ? styles.leaveRoom : ''}`}>
           {showSearch
             ? (
               <Form
                 className={styles.formActive}
-                initial={{
-                  q: router.query.q || '',
-                  what: router.query.what || '',
-                  sort: router.query.sort || '',
-                  when: router.query.when || ''
-                }}
+                initial={{ q, what, sort, when }}
                 onSubmit={search}
               >
                 {filter &&
-                  <div className='text-muted font-weight-bold my-3 d-flex align-items-center'>
+                  <div className='text-muted fw-bold my-3 d-flex align-items-center'>
                     <Select
-                      groupClassName='mr-2 mb-0'
+                      groupClassName='me-2 mb-0'
                       onChange={(formik, e) => search({ ...formik?.values, what: e.target.value })}
                       name='what'
                       size='sm'
+                      overrideValue={what}
                       items={['all', 'posts', 'comments', 'stackers']}
                     />
-                    {router.query.what !== 'stackers' &&
+                    {what !== 'stackers' &&
                       <>
                         by
                         <Select
@@ -83,27 +87,30 @@ export default function Search ({ sub }) {
                           onChange={(formik, e) => search({ ...formik?.values, sort: e.target.value })}
                           name='sort'
                           size='sm'
+                          overrideValue={sort}
                           items={['match', 'recent', 'comments', 'sats', 'votes']}
                         />
                         for
                         <Select
-                          groupClassName='mb-0 ml-2'
+                          groupClassName='mb-0 ms-2'
                           onChange={(formik, e) => search({ ...formik?.values, when: e.target.value })}
                           name='when'
                           size='sm'
+                          overrideValue={when}
                           items={['forever', 'day', 'week', 'month', 'year']}
                         />
 
                       </>}
                   </div>}
-                <div className={`${styles.active}`}>
+                <div className={styles.active}>
                   <Input
                     name='q'
                     required
                     autoFocus
-                    groupClassName='mr-3 mb-0 flex-grow-1'
+                    groupClassName='me-3 mb-0 flex-grow-1'
                     className='flex-grow-1'
                     clear
+                    overrideValue={q}
                     onChange={async (formik, e) => {
                       setSearching(true)
                       setQ(e.target.value?.trim())

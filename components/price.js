@@ -4,6 +4,7 @@ import { fixedDecimal } from '../lib/format'
 import { useMe } from './me'
 import { PRICE } from '../fragments/price'
 import { CURRENCY_SYMBOLS } from '../lib/currency'
+import { SSR } from '../lib/constants'
 
 export const PriceContext = React.createContext({
   price: null,
@@ -17,7 +18,15 @@ export function usePrice () {
 export function PriceProvider ({ price, children }) {
   const me = useMe()
   const fiatCurrency = me?.fiatCurrency
-  const { data } = useQuery(PRICE, { variables: { fiatCurrency }, pollInterval: 30000, fetchPolicy: 'cache-and-network' })
+  const { data } = useQuery(PRICE, {
+    variables: { fiatCurrency },
+    ...(SSR
+      ? {}
+      : {
+          pollInterval: 30000,
+          nextFetchPolicy: 'cache-and-network'
+        })
+  })
 
   const contextValue = {
     price: data?.price || price,
@@ -34,7 +43,7 @@ export function PriceProvider ({ price, children }) {
 export default function Price ({ className }) {
   const [asSats, setAsSats] = useState(undefined)
   useEffect(() => {
-    setAsSats(localStorage.getItem('asSats'))
+    setAsSats(window.localStorage.getItem('asSats'))
   }, [])
   const { price, fiatSymbol } = usePrice()
 
@@ -42,13 +51,13 @@ export default function Price ({ className }) {
 
   const handleClick = () => {
     if (asSats === 'yep') {
-      localStorage.setItem('asSats', '1btc')
+      window.localStorage.setItem('asSats', '1btc')
       setAsSats('1btc')
     } else if (asSats === '1btc') {
-      localStorage.removeItem('asSats')
+      window.localStorage.removeItem('asSats')
       setAsSats(undefined)
     } else {
-      localStorage.setItem('asSats', 'yep')
+      window.localStorage.setItem('asSats', 'yep')
       setAsSats('yep')
     }
   }

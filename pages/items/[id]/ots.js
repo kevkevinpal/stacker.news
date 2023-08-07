@@ -2,14 +2,23 @@ import Layout from '../../../components/layout'
 import { ITEM_OTS } from '../../../fragments/items'
 import { getGetServerSideProps } from '../../../api/ssrApollo'
 import stringifyCanon from 'canonical-json'
-import { Button } from 'react-bootstrap'
+import Button from 'react-bootstrap/Button'
+import { useQuery } from '@apollo/client'
+import { useRouter } from 'next/router'
+import PageLoading from '../../../components/page-loading'
 
 export const getServerSideProps = getGetServerSideProps(ITEM_OTS, null,
   data => !data.item || !data.item.otsHash)
 
-export default function OtsItem ({ data: { item } }) {
+export default function OtsItem ({ ssrData }) {
+  const router = useRouter()
+  const { data } = useQuery(ITEM_OTS, { variables: { id: router.query.id } })
+  if (!data && !ssrData) return <PageLoading />
+
+  const { item } = data || ssrData
+
   return (
-    <Layout noSeo>
+    <Layout seo={false}>
       <Ots item={item} />
     </Layout>
   )
@@ -28,7 +37,7 @@ function Ots ({ item }) {
         : (
           <pre
             className='mb-2 p-2 rounded'
-            style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word', border: '1px solid var(--theme-borderColor)', color: 'var(--theme-color)' }}
+            style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word', border: '1px solid var(--theme-borderColor)', color: 'var(--bs-body-color)' }}
           >{itemString}
           </pre>)}
       <Button href={`/api/ots/preimage/${item.id}`} className='mt-1' variant='grey-medium'>download preimage</Button>

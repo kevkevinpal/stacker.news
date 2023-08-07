@@ -4,24 +4,25 @@ import Link from 'next/link'
 import Button from 'react-bootstrap/Button'
 import { gql, useMutation, useQuery } from '@apollo/client'
 import Qr, { QrSkeleton } from '../components/qr'
-import LayoutCenter from '../components/layout-center'
+import { CenterLayout } from '../components/layout'
 import InputGroup from 'react-bootstrap/InputGroup'
 import { WithdrawlSkeleton } from './withdrawals/[id]'
 import { useMe } from '../components/me'
 import { useEffect, useState } from 'react'
 import { requestProvider } from 'webln'
-import { Alert } from 'react-bootstrap'
+import Alert from 'react-bootstrap/Alert'
 import { CREATE_WITHDRAWL, SEND_TO_LNADDR } from '../fragments/wallet'
 import { getGetServerSideProps } from '../api/ssrApollo'
 import { amountSchema, lnAddrSchema, withdrawlSchema } from '../lib/validate'
+import { SSR } from '../lib/constants'
 
 export const getServerSideProps = getGetServerSideProps()
 
 export default function Wallet () {
   return (
-    <LayoutCenter>
+    <CenterLayout>
       <WalletForm />
-    </LayoutCenter>
+    </CenterLayout>
   )
 }
 
@@ -37,8 +38,8 @@ function YouHaveSats () {
 function WalletHistory () {
   return (
     <div className='pt-4'>
-      <Link href='/satistics?inc=invoice,withdrawal' passHref>
-        <a className='text-muted font-weight-bold text-underline'>wallet history</a>
+      <Link href='/satistics?inc=invoice,withdrawal' className='text-muted fw-bold text-underline'>
+        wallet history
       </Link>
     </div>
   )
@@ -54,7 +55,7 @@ export function WalletForm () {
         <Link href='/wallet?type=fund'>
           <Button variant='success'>fund</Button>
         </Link>
-        <span className='mx-3 font-weight-bold text-muted'>or</span>
+        <span className='mx-3 fw-bold text-muted'>or</span>
         <Link href='/wallet?type=withdraw'>
           <Button variant='success'>withdraw</Button>
         </Link>
@@ -86,7 +87,7 @@ export function FundForm () {
     }`)
 
   useEffect(() => {
-    setShowAlert(!localStorage.getItem('hideLnAddrAlert'))
+    setShowAlert(!window.localStorage.getItem('hideLnAddrAlert'))
   }, [])
 
   if (called && !error) {
@@ -99,7 +100,7 @@ export function FundForm () {
       {me && showAlert &&
         <Alert
           variant='success' dismissible onClose={() => {
-            localStorage.setItem('hideLnAddrAlert', 'yep')
+            window.localStorage.setItem('hideLnAddrAlert', 'yep')
             setShowAlert(false)
           }}
         >
@@ -189,7 +190,7 @@ export function WithdrawlForm () {
         />
         <SubmitButton variant='success' className='mt-2'>withdraw</SubmitButton>
       </Form>
-      <span className='my-3 font-weight-bold text-muted'>or via</span>
+      <span className='my-3 fw-bold text-muted'>or via</span>
       <Link href='/wallet?type=lnurl-withdraw'>
         <Button variant='grey'>QR code</Button>
       </Link>
@@ -210,7 +211,7 @@ function LnQRWith ({ k1, encodedUrl }) {
       k1
     }
   }`
-  const { data } = useQuery(query, { pollInterval: 1000, fetchPolicy: 'cache-first' })
+  const { data } = useQuery(query, SSR ? {} : { pollInterval: 1000, nextFetchPolicy: 'cache-and-network' })
 
   if (data?.lnWith?.withdrawalId) {
     router.push(`/withdrawals/${data.lnWith.withdrawalId}`)

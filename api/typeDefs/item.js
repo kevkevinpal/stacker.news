@@ -1,25 +1,15 @@
-import { gql } from 'apollo-server-micro'
+import { gql } from 'graphql-tag'
 
 export default gql`
   extend type Query {
-    items(sub: String, sort: String, type: String, cursor: String, name: String, within: String): Items
-    moreFlatComments(sub: String, sort: String!, cursor: String, name: String, within: String): Comments
-    moreBookmarks(cursor: String, name: String!): Items
+    items(sub: String, sort: String, type: String, cursor: String, name: String, when: String, by: String, limit: Int): Items
     item(id: ID!): Item
-    comments(id: ID!, sort: String): [Item!]!
     pageTitleAndUnshorted(url: String!): TitleUnshorted
     dupes(url: String!): [Item!]
     related(cursor: String, title: String, id: ID, minMatch: String, limit: Int): Items
-    allItems(cursor: String): Items
-    getBountiesByUserName(name: String!, cursor: String, , limit: Int): Items
-    search(q: String, cursor: String, what: String, sort: String, when: String): Items
+    search(q: String, sub: String, cursor: String, what: String, sort: String, when: String): Items
     auctionPosition(sub: String, id: ID, bid: Int!): Int!
     itemRepetition(parentId: ID): Int!
-    outlawedItems(cursor: String): Items
-    borderlandItems(cursor: String): Items
-    freebieItems(cursor: String): Items
-    topItems(cursor: String, sub: String, sort: String, when: String): Items
-    topComments(cursor: String, sub: String, sort: String, when: String): Comments
   }
 
   type TitleUnshorted {
@@ -75,9 +65,9 @@ export default gql`
 
   type Item {
     id: ID!
-    createdAt: String!
-    updatedAt: String!
-    deletedAt: String
+    createdAt: Date!
+    updatedAt: Date!
+    deletedAt: Date
     title: String
     searchTitle: String
     url: String
@@ -97,7 +87,7 @@ export default gql`
     bountyPaidTo: [Int]
     sats: Int!
     commentSats: Int!
-    lastCommentAt: String
+    lastCommentAt: Date
     upvotes: Int!
     wvotes: Float!
     meSats: Int!
@@ -108,7 +98,7 @@ export default gql`
     freebie: Boolean!
     paidImgLink: Boolean
     ncomments: Int!
-    comments: [Item!]!
+    comments(sort: String): [Item!]!
     path: String
     position: Int
     prior: Int

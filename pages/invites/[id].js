@@ -1,17 +1,19 @@
 import Login from '../../components/login'
-import { providers, getSession } from 'next-auth/client'
+import { getProviders } from 'next-auth/react'
+import { getServerSession } from 'next-auth/next'
 import models from '../../api/models'
 import serialize from '../../api/resolvers/serial'
 import { gql } from '@apollo/client'
 import { INVITE_FIELDS } from '../../fragments/invites'
 import getSSRApolloClient from '../../api/ssrApollo'
 import Link from 'next/link'
-import LayoutCenter from '../../components/layout-center'
+import { CenterLayout } from '../../components/layout'
+import { getAuthOptions } from '../api/auth/[...nextauth]'
 
 export async function getServerSideProps ({ req, res, query: { id, error = null } }) {
-  const session = await getSession({ req })
+  const session = await getServerSession(req, res, getAuthOptions(req))
 
-  const client = await getSSRApolloClient(req)
+  const client = await getSSRApolloClient({ req, res })
   const { data } = await client.query({
     query: gql`
       ${INVITE_FIELDS}
@@ -33,21 +35,22 @@ export async function getServerSideProps ({ req, res, query: { id, error = null 
       // attempt to send gift
       // catch any errors and just ignore them for now
       await serialize(models,
-        models.$queryRaw('SELECT invite_drain($1, $2)', session.user.id, id))
+        models.$queryRawUnsafe('SELECT invite_drain($1::INTEGER, $2::INTEGER)', session.user.id, id))
     } catch (e) {
       console.log(e)
     }
 
-    res.writeHead(302, {
-      Location: '/'
-    })
-    res.end()
-    return { props: {} }
+    return {
+      redirect: {
+        destination: '/',
+        permanent: false
+      }
+    }
   }
 
   return {
     props: {
-      providers: await providers({ req, res }),
+      providers: await getProviders(),
       callbackUrl: process.env.PUBLIC_URL + req.url,
       invite: data.invite,
       error
@@ -65,7 +68,7 @@ function InviteHeader ({ invite }) {
     Inner = () => (
       <div>
         Get <span className='text-success'>{invite.gift} free sats</span> from{' '}
-        <Link href={`/${invite.user.name}`} passHref><a>@{invite.user.name}</a></Link>{' '}
+        <Link href={`/${invite.user.name}`}>@{invite.user.name}</Link>{' '}
         when you sign up today
       </div>
     )
@@ -80,8 +83,8 @@ function InviteHeader ({ invite }) {
 
 export default function Invite ({ invite, ...props }) {
   return (
-    <LayoutCenter>
+    <CenterLayout>
       <Login Header={() => <InviteHeader invite={invite} />} text='Sign up' {...props} />
-    </LayoutCenter>
+    </CenterLayout>
   )
 }
